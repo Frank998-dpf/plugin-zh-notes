@@ -1,3 +1,7 @@
+# 0.6.1
+
+- Rename the plugin to Extension Index (插件索引) while keeping the existing plugin ID and user data.
+
 # 0.6.0
 
 - Show each installed plugin's original name and Chinese alias on separate lines in the settings sidebar.
