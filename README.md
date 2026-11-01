@@ -2,20 +2,19 @@
 
 插件索引
 
-Add Chinese aliases, short explanations, and personal notes to installed community plugins in Obsidian's native plugin list.
+Understand and organize installed community plugins with Chinese aliases, explanations, personal notes, search, sorting, and groups.
 
-为「设置 → 第三方插件 → 已安装插件」添加中文别名、用途说明和个人备注。保留原始英文名称，通过名称旁的小铅笔编辑中文内容。
+插件索引（Extension Index）帮助你看懂、查找和整理已安装的 Obsidian 第三方插件。它直接增强「设置 → 第三方插件 → 已安装插件」页面，保留插件原名，同时显示中文别名和用途说明。
 
-## Features / 功能
+## 主要功能
 
-- **Offline references:** 6,329 bundled Chinese aliases and explanations. The text data is embedded in `main.js`; no extra download is needed.
-- **Personal notes:** your own aliases and descriptions take priority over generated caches and bundled references.
-- **Optional online translation:** fill missing Chinese descriptions without an API account using MyMemory.
-- **Optional AI analysis:** use an OpenAI-compatible Chat Completions endpoint to generate more detailed explanations from public plugin metadata and author README excerpts.
-- **Small edit icon:** a subtle pencil beside each plugin name. Original descriptions remain available in the expandable original-text section.
-- **Plugin list organization:** two-line original/Chinese names in the sidebar, independent sorting on both lists, and manual groups in Installed plugins. Time sorting uses plugin-folder creation time, which may change after copying or restoring a vault.
+- 左侧插件入口分行显示原名和中文别名；已安装列表可按原名或中文别名搜索。
+- 为插件添加个人别名与备注，也可随时恢复预置内容。个人修改优先于自动生成和内置资料。
+- 左侧插件入口与已安装列表可分别设置排序；已安装插件还支持手动分组。
+- 内置 6,329 条离线中文参考资料。资料可能存在错译或过时内容，欢迎通过反馈渠道指出。
+- 可选择联网翻译缺少的说明，或使用自行配置的 AI 服务分析公开插件资料。这些功能由你主动启动；AI 服务可能收费。
 
-内置资料经过全量规则清理和重点条目修订，仍可能存在错译或过时内容，不代表逐条人工精译或已实测所有第三方插件。
+离线资料和个人备注无需联网。本插件不会读取或发送你的笔记正文或个人备注；联网翻译会发送插件名称和描述，AI 分析可附带公开 README 摘录。仅支持 Obsidian 1.14.5 及以上桌面版，界面目前为中文。按时间排序使用插件文件夹的创建时间，它不一定等于安装时间。本插件不负责安装、更新或卸载其他插件。
 
 ## Requirements / 运行要求
 
