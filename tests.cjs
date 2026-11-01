@@ -20,7 +20,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, "main.js"), "utf8") +
-  "\nmodule.exports.testAPI = { BUILTINS, parseData, getNote, chunks, endpointUrl, aiNote, fingerprint, ChineseNotesSettings, PROVIDERS, settingsSignature, needsTranslation };", context);
+  "\nmodule.exports.testAPI = { BUILTINS, managementData, sortPlugins, parseData, getNote, chunks, endpointUrl, aiNote, fingerprint, ChineseNotesSettings, PROVIDERS, settingsSignature, needsTranslation };", context);
 const Plugin = context.module.exports;
 const { parseData, getNote } = Plugin.testAPI;
 const { chunks, endpointUrl, aiNote, fingerprint } = Plugin.testAPI;
@@ -487,4 +487,110 @@ test("发现独立设置窗口并清理已关闭窗口，停用后不再发现",
   p.syncActiveDocument();
   assert.equal(watched.length, 1);
   delete context.activeDocument;
+});
+
+test("旧版数据新增管理设置时不丢备注、缓存与 AI 配置", () => {
+  const p = plugin();
+  p.data.entries.dataview = { alias: "我的查询", description: "我的记录" };
+  p.data.settings = { endpoint: "https://example.com/v1/chat/completions", model: "example", secretId: "example-key", provider: "custom" };
+  const raw = JSON.parse(JSON.stringify(p.data)); delete raw.management;
+  const migrated = parseData(raw);
+  assert.equal(migrated.entries.dataview.alias, "我的查询");
+  assert.equal(migrated.settings.secretId, "example-key");
+  assert.equal(migrated.management.grouped, false);
+  assert.equal(migrated.management.sidebarSort, "default");
+});
+
+test("时间排序将未知时间置后，同一时间保留原顺序；原名数字自然排序", () => {
+  const { sortPlugins } = Plugin.testAPI;
+  const items = [{ name: "Plugin 10", index: 0, ctime: null }, { name: "Plugin 2", index: 1, ctime: 200 },
+    { name: "Alpha", index: 2, ctime: 100 }, { name: "beta", index: 3, ctime: 200 }];
+  assert.deepEqual(Array.from(sortPlugins(items, "new"), (p) => p.index), [1, 3, 2, 0]);
+  assert.deepEqual(Array.from(sortPlugins(items, "old"), (p) => p.index), [2, 1, 3, 0]);
+  assert.deepEqual(Array.from(sortPlugins(items, "az"), (p) => p.index), [2, 3, 1, 0]);
+  assert.deepEqual(Array.from(sortPlugins(items, "default"), (p) => p.index), [0, 1, 2, 3]);
+  assert.equal(items[0].index, 0);
+});
+
+test("分组新增重命名删除持久化，重复名称拒绝，删除归属和折叠状态自动清理", async () => {
+  const p = plugin();
+  await p.changeGroup(null, "AI 工具");
+  const id = p.data.management.groups[0].id;
+  await p.saveManagement((m) => ({ ...m, grouped: true, sidebarSort: "za", listSort: "new",
+    assignments: { dataview: id }, collapsed: [id] }));
+  await assert.rejects(p.changeGroup(null, "AI 工具"), /已存在/);
+  await assert.rejects(p.changeGroup(null, "未分组"), /未分组/);
+  await p.changeGroup(id, "效率工具");
+  const loaded = parseData(JSON.parse(JSON.stringify(p.data)));
+  assert.equal(loaded.management.groups[0].name, "效率工具");
+  assert.equal(loaded.management.assignments.dataview, id);
+  assert.equal(loaded.management.sidebarSort, "za");
+  assert.equal(loaded.management.listSort, "new");
+  await p.changeGroup(id, null);
+  assert.equal(p.data.management.assignments.dataview, undefined);
+  assert.equal(p.data.management.collapsed.length, 0);
+  assert.equal(p.data.management.groups.length, 0);
+});
+
+test("分组保存失败保留旧状态，并发保存不丢失其他管理设置", async () => {
+  const p = plugin();
+  p.saveData = async () => { throw new Error("写入失败"); };
+  await assert.rejects(p.changeGroup(null, "失败分组"), /写入失败/);
+  assert.equal(p.data.management.groups.length, 0);
+  p.saveData = async () => {};
+  await Promise.all([p.saveManagement((m) => ({ ...m, listSort: "az" })),
+    p.saveManagement((m) => ({ ...m, sidebarSort: "new" }))]);
+  assert.equal(p.data.management.listSort, "az");
+  assert.equal(p.data.management.sidebarSort, "new");
+});
+
+test("管理配置忽略非法分组、重复名称和失效归属", () => {
+  const { managementData } = Plugin.testAPI;
+  const m = managementData({ listSort: "invalid", groups: [{ id: "g-1", name: "工作" },
+    { id: "g-2", name: "工作" }, { id: "g-3", name: "未分组" }],
+    assignments: { a: "g-1", b: "missing" }, collapsed: ["g-1", "missing", "g-1"] });
+  assert.equal(m.groups.length, 1);
+  assert.equal(m.assignments.a, "g-1");
+  assert.equal(m.assignments.b, undefined);
+  assert.equal(m.collapsed.length, 1);
+  assert.equal(m.listSort, "default");
+});
+
+test("读取插件文件夹创建时间失败时仍返回插件，不以修改时间替代", async () => {
+  const p = plugin();
+  p.app.vault = { configDir: ".obsidian", adapter: {
+    exists: async () => true, list: async () => ({ folders: [".obsidian/plugins/a", ".obsidian/plugins/b"] }),
+    read: async (path) => JSON.stringify({ id: path.includes("/a/") ? "a" : "b", name: "Example" }),
+    stat: async (path) => { if (path.endsWith("/a")) return { type: "folder", ctime: 123, mtime: 999 }; throw new Error("不可用"); },
+  } };
+  p.readManifest = Plugin.prototype.readManifest;
+  const items = await p.installedManifests();
+  assert.equal(items.length, 2);
+  assert.equal(items[0].ctime, 123);
+  assert.equal(items[1].ctime, null);
+});
+
+test("开关重绘按插件行锚点恢复视口，同时恢复侧栏位置", () => {
+  const p = plugin();
+  const scroller = { isConnected: true, scrollTop: 200,
+    querySelectorAll: () => [{ dataset: { pluginId: "calendar" }, getClientRects: () => [{}],
+      getBoundingClientRect: () => ({ top: 80 }) }] };
+  const side = { isConnected: true, scrollTop: 0 };
+  p.restoreViewport({ viewportLock: { scroller, id: "calendar", rowTop: 120, top: 240, sideScroll: [[side, 60]] } });
+  assert.equal(scroller.scrollTop, 160);
+  assert.equal(side.scrollTop, 60);
+});
+
+test("用户主动滚动时释放高度占位，不把用户拉回旧位置", () => {
+  const p = plugin();
+  const list = { isConnected: true, style: { minHeight: "900px" } };
+  const scroller = { isConnected: true, scrollTop: 400 };
+  let cleared = false;
+  const state = { win: { clearTimeout: () => { cleared = true; } },
+    viewportLock: { list, minHeight: "", scroller, top: 100, timer: 1 } };
+  p.releaseViewport(state, false);
+  assert.equal(list.style.minHeight, "");
+  assert.equal(scroller.scrollTop, 400);
+  assert.equal(state.viewportLock, null);
+  assert.equal(cleared, true);
 });

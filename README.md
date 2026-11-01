@@ -11,6 +11,7 @@ Add Chinese aliases, short explanations, and personal notes to installed communi
 - **Optional online translation:** fill missing Chinese descriptions without an API account using MyMemory.
 - **Optional AI analysis:** use an OpenAI-compatible Chat Completions endpoint to generate more detailed explanations from public plugin metadata and author README excerpts.
 - **Small edit icon:** a subtle pencil beside each plugin name. Original descriptions remain available in the expandable original-text section.
+- **Plugin list organization:** two-line original/Chinese names in the sidebar, independent sorting on both lists, and manual groups in Installed plugins. Time sorting uses plugin-folder creation time, which may change after copying or restoring a vault.
 
 内置资料经过全量规则清理和重点条目修订，仍可能存在错译或过时内容，不代表逐条人工精译或已实测所有第三方插件。
 
@@ -30,10 +31,11 @@ Do not treat a draft release or this repository's default branch as a published 
 
 ## Use / 使用方法
 
-1. Open **Settings → Community plugins → Installed plugins**. 中文别名和说明直接显示在已安装列表中。
-2. Click the small pencil next to a plugin name to edit your alias and description. Restore defaults through the same editor when needed.
-3. Open **Settings → Chinese Notes → 免费翻译** to fill only missing descriptions. Existing personal notes are preserved.
-4. For AI, choose **AI 分析**, select a provider and model, enter your API key, and click **保存并测试**. After a successful test, click **开始分析**.
+1. Open **Settings → Community plugins → Installed plugins**. 中文别名和说明直接显示在已安装列表中；左侧插件设置入口显示原名和中文别名。
+2. 左右两处可分别选择排序。已安装插件列表支持按中文别名搜索；打开「分组显示」，通过「管理分组」新建分组，并在插件行选择归属。
+3. Click the small pencil next to a plugin name to edit your alias and description. Restore defaults through the same editor when needed.
+4. Open **Settings → Chinese Notes → 免费翻译** to fill only missing descriptions. Existing personal notes are preserved.
+5. For AI, choose **AI 分析**, select a provider and model, enter your API key, and click **保存并测试**. After a successful test, click **开始分析**.
 
 AI provider presets include DeepSeek, Qwen (Beijing), GLM, SiliconFlow, Kimi (China), OpenAI, local Ollama, and a custom compatible endpoint. The base URL is under advanced options. Model names and account permissions can change; a custom model ID can be entered.
 
@@ -66,7 +68,7 @@ Service policies: [MyMemory terms](https://mymemory.translated.net/doc/usagelimi
 
 Personal notes → generated cache → bundled reference is the lookup priority. Upgrading preserves existing `data.json`; schema-1 notes are read compatibly and migrate only on a subsequent save. Back up `data.json` before downgrading or deleting the plugin folder. This project does not implement cross-vault synchronization.
 
-The left settings navigation keeps original plugin names. Native plugin search does not search the added Chinese annotations. Compatibility with other plugins that rewrite the same settings list is not guaranteed. The runtime does not install or update itself or other plugins.
+The left settings navigation keeps each original plugin name on the first line and shows its Chinese alias below. The Installed plugins list has a separate search box that matches original names and Chinese aliases; Obsidian's native search may not match the added aliases. Compatibility with other plugins that rewrite the same settings list is not guaranteed. The runtime does not install or update itself or other plugins.
 
 ## Development / 开发
 
