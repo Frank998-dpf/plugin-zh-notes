@@ -32,7 +32,7 @@ Do not treat a draft release or this repository's default branch as a published 
 
 1. Open **Settings → Community plugins → Installed plugins**. 中文别名和说明直接显示在已安装列表中。
 2. Click the small pencil next to a plugin name to edit your alias and description. Restore defaults through the same editor when needed.
-3. Open **Settings → 插件中文备注 → 免费翻译** to fill only missing descriptions. Existing personal notes are preserved.
+3. Open **Settings → Chinese Notes → 免费翻译** to fill only missing descriptions. Existing personal notes are preserved.
 4. For AI, choose **AI 分析**, select a provider and model, enter your API key, and click **保存并测试**. After a successful test, click **开始分析**.
 
 AI provider presets include DeepSeek, Qwen (Beijing), GLM, SiliconFlow, Kimi (China), OpenAI, local Ollama, and a custom compatible endpoint. The base URL is under advanced options. Model names and account permissions can change; a custom model ID can be entered.

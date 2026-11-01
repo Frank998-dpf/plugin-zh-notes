@@ -44,6 +44,8 @@ test("商店标准安装资产保留完整第三方 MIT 许可，不依赖额外
   assert.match(licenseNotice, /THE SOFTWARE IS PROVIDED "AS IS"/);
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "manifest.json"), "utf8"));
   assert.equal(manifest.id, "plugin-zh-notes");
+  assert.match(manifest.name, /^[A-Za-z0-9 +()-]+$/);
+  assert.doesNotMatch(manifest.name, /plugin|obsidian/i);
   assert.equal(manifest.author, "Frank998-dpf");
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.ok(manifest.description.length <= 250 && manifest.description.endsWith("."));

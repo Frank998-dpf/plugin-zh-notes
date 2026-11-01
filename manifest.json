@@ -1,6 +1,6 @@
 {
   "id": "plugin-zh-notes",
-  "name": "插件中文备注",
+  "name": "Chinese Notes",
   "version": "0.5.1",
   "minAppVersion": "1.14.5",
   "description": "Add Chinese aliases, explanations, and personal notes to installed community plugins, with offline references and optional online translation and AI analysis.",
