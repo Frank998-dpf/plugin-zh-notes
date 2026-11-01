@@ -33,7 +33,7 @@
  */
 "use strict";
 
-const { Plugin, Modal, Notice, setIcon, PluginSettingTab, requestUrl } = require("obsidian");
+const { Plugin, Modal, Notice, setIcon, PluginSettingTab, Setting, requestUrl } = require("obsidian");
 
 // Offline Chinese reference data: 6,329 entries. See THIRD_PARTY_NOTICES.md.
 // Generated from reviewed data; personal notes and generated caches retain priority.
@@ -377,7 +377,8 @@ class ChineseNotesSettings extends PluginSettingTab {
       return el;
     };
     const header = element(doc, "header", "pzn-header");
-    header.append(element(doc, "h2", "pzn-title", "中文说明"));
+    const heading = new Setting(header).setName("中文说明").setHeading();
+    heading.settingEl.classList.add("pzn-title");
     button(header, "查看插件列表 ↗", () => this.owner.openPluginList(), "pzn-text-button");
     const summary = element(doc, "p", "pzn-overview", "正在读取插件清单…");
     root.append(header, summary);

@@ -1,0 +1,34 @@
+name: Prepare draft release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm test
+      - run: git diff --exit-code -- main.js manifest.json styles.css
+      - name: Prepare draft, never publish automatically
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "A release for this version already exists; refusing to replace assets."
+            exit 1
+          fi
+          gh release create "$VERSION" main.js manifest.json styles.css \
+            --target "$GITHUB_SHA" --title "$VERSION" \
+            --notes-file CHANGELOG.md --draft
