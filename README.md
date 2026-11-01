@@ -22,7 +22,7 @@ Add Chinese aliases, short explanations, and personal notes to installed communi
 
 ## Install / 安装
 
-The plugin is being prepared for its initial community-directory submission. **It is not yet listed in the official store.**
+Community-store availability is shown on the [directory listing](https://community.obsidian.md/plugins/plugin-zh-notes). If the entry is still under review, use a published GitHub release for manual installation.
 
 For manual installation, download `main.js`, `manifest.json`, and `styles.css` from the same published GitHub release. Put them in `<your vault configuration directory>/plugins/plugin-zh-notes/`, reload the plugin list, and enable it. When updating, preserve your existing `data.json`.
 

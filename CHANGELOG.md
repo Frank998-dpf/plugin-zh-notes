@@ -1,6 +1,6 @@
 # 0.5.1
 
-Initial community-directory candidate. Not yet approved or listed.
+Initial community-directory submission. Community installation becomes available after directory approval.
 
 - Add Chinese aliases, explanations, and editable personal notes to the native installed-plugin list.
 - Include 6,329 offline reference entries, optional anonymous translation, and configurable AI analysis.
