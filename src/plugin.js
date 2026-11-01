@@ -167,9 +167,60 @@ function validText(value, field) {
   return value.trim();
 }
 
+const SORT_MODES = [["default", "默认顺序"], ["az", "原名 A → Z"], ["za", "原名 Z → A"],
+  ["new", "文件夹创建时间：最新优先"], ["old", "文件夹创建时间：最早优先"]];
+const SIDE_SELECTOR = '.mod-settings [data-section="community-plugins"]';
+
+function managementData(raw) {
+  const value = record(raw) ? raw : {};
+  const groups = [];
+  for (const g of Array.isArray(value.groups) ? value.groups : []) {
+    if (!record(g) || typeof g.id !== "string" || !/^[a-z0-9-]{1,80}$/.test(g.id) ||
+        typeof g.name !== "string" || !g.name.trim() || g.name.length > 30 || g.name.trim() === "未分组" ||
+        groups.some((item) => item.id === g.id || item.name === g.name.trim())) continue;
+    groups.push({ id: g.id, name: g.name.trim() });
+  }
+  const assignments = Object.create(null);
+  if (record(value.assignments)) for (const [id, group] of Object.entries(value.assignments)) {
+    if (/^[a-zA-Z0-9_-]+$/.test(id) && groups.some((g) => g.id === group)) assignments[id] = group;
+  }
+  return { sidebarSort: SORT_MODES.some(([id]) => id === value.sidebarSort) ? value.sidebarSort : "default",
+    listSort: SORT_MODES.some(([id]) => id === value.listSort) ? value.listSort : "default",
+    grouped: value.grouped === true, groups, assignments,
+    collapsed: [...new Set((Array.isArray(value.collapsed) ? value.collapsed : []).filter((id) =>
+      id === "" || groups.some((g) => g.id === id)))] };
+}
+
+function sortPlugins(items, mode) {
+  return [...items].sort((a, b) => {
+    if (mode === "az" || mode === "za") {
+      const result = a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true });
+      return (mode === "za" ? -result : result) || a.index - b.index;
+    }
+    if (mode === "new" || mode === "old") {
+      const at = Number.isFinite(a.ctime) && a.ctime > 0, bt = Number.isFinite(b.ctime) && b.ctime > 0;
+      if (at !== bt) return at ? -1 : 1;
+      if (at && a.ctime !== b.ctime) return mode === "new" ? b.ctime - a.ctime : a.ctime - b.ctime;
+    }
+    return a.index - b.index;
+  });
+}
+
+function sortSelect(doc, label) {
+  const wrapper = element(doc, "label", "pzn-sort-label", label);
+  const select = element(doc, "select", "dropdown");
+  for (const [value, text] of SORT_MODES) {
+    const option = element(doc, "option", "", text);
+    option.value = value;
+    select.append(option);
+  }
+  wrapper.append(select);
+  return { wrapper, select };
+}
+
 function parseData(raw) {
   const entries = Object.create(null);
-  const empty = { schemaVersion: 2, entries, cache: Object.create(null), settings: { ...DEFAULT_SETTINGS, provider: "deepseek" }, profiles: Object.create(null), connection: null, usage: { date: "", chars: 0 } };
+  const empty = { schemaVersion: 2, entries, cache: Object.create(null), settings: { ...DEFAULT_SETTINGS, provider: "deepseek" }, profiles: Object.create(null), connection: null, usage: { date: "", chars: 0 }, management: managementData(null) };
   if (raw === null || raw === undefined) return empty;
   if (!record(raw) || ![1, 2].includes(raw.schemaVersion) || !record(raw.entries)) {
     throw new Error("备注文件格式不兼容；已停止加载，避免覆盖原数据");
@@ -181,6 +232,7 @@ function parseData(raw) {
       description: validText(entry.description, "description"),
     };
   }
+  empty.management = managementData(raw.management);
   if (raw.schemaVersion === 1) return empty;
   empty.settings = checkedSettings(raw.settings);
   if (record(raw.profiles)) for (const [id, profile] of Object.entries(raw.profiles)) {
@@ -602,6 +654,65 @@ class ChineseNotesSettings extends PluginSettingTab {
   }
 }
 
+class GroupManager extends Modal {
+  constructor(owner) { super(owner.app); this.owner = owner; }
+
+  onOpen() {
+    this.setTitle("管理分组");
+    this.modalEl.classList.add("pzn-modal");
+    this.render();
+  }
+
+  render() {
+    const doc = this.contentEl.ownerDocument;
+    this.contentEl.replaceChildren();
+    this.contentEl.append(element(doc, "p", "pzn-muted", "分组只整理显示，不改变插件启用状态。删除分组后，插件回到未分组。"));
+    const error = element(doc, "p", "pzn-error");
+    const act = (button, operation) => {
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try { await operation(); this.render(); }
+        catch (e) { error.textContent = e.message; button.disabled = false; }
+      });
+    };
+    for (const g of this.owner.data.management.groups) {
+      const row = element(doc, "div", "pzn-group-editor");
+      const label = element(doc, "label", "pzn-group-name");
+      label.append(element(doc, "span", "pzn-sr-only", `分组名称：${g.name}`));
+      const input = element(doc, "input"); input.value = g.name; input.maxLength = 30;
+      label.append(input);
+      const rename = element(doc, "button", "", "保存名称");
+      const remove = element(doc, "button", "", "删除");
+      act(rename, () => this.owner.changeGroup(g.id, input.value));
+      let confirming = false;
+      remove.addEventListener("click", async () => {
+        if (!confirming) { confirming = true; remove.textContent = "确认删除"; return; }
+        remove.disabled = true;
+        try { await this.owner.changeGroup(g.id, null); this.render(); }
+        catch (e) { error.textContent = e.message; remove.disabled = false; }
+      });
+      row.append(label, rename, remove); this.contentEl.append(row);
+    }
+    const form = element(doc, "form", "pzn-group-editor");
+    const label = element(doc, "label", "pzn-group-name");
+    label.append(element(doc, "span", "pzn-sr-only", "新分组名称"));
+    const input = element(doc, "input"); input.placeholder = "新分组名称"; input.maxLength = 30; input.required = true;
+    label.append(input);
+    const add = element(doc, "button", "mod-cta", "添加"); add.type = "submit";
+    form.append(label, add);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault(); add.disabled = true;
+      try { await this.owner.changeGroup(null, input.value); this.render(); }
+      catch (e) { error.textContent = e.message; add.disabled = false; }
+    });
+    const done = element(doc, "button", "", "完成"); done.onclick = () => this.close();
+    const actions = element(doc, "div", "pzn-actions"); actions.append(done);
+    this.contentEl.append(form, error, actions);
+  }
+
+  onClose() { this.owner.editors.delete(this); this.contentEl.replaceChildren(); }
+}
+
 class PluginChineseNotes extends Plugin {
   async onload() {
     this.stopped = false;
@@ -611,6 +722,9 @@ class PluginChineseNotes extends Plugin {
     this.writeQueue = Promise.resolve();
     this.activeRun = null;
     this.catalog = null;
+    this.managementCatalog = new Map();
+    this.managementScanAt = 0;
+    this.managementScanPending = false;
     try {
       this.data = parseData(await this.loadData());
     } catch (error) {
@@ -811,7 +925,13 @@ class PluginChineseNotes extends Plugin {
       const path = `${folder}/manifest.json`;
       if (!await adapter.exists(path)) continue;
       const m = await this.readManifest(path);
-      if (m) found.set(m.id, m);
+      if (m) {
+        try {
+          const stat = await adapter.stat(folder);
+          m.ctime = stat?.type === "folder" && Number.isFinite(stat.ctime) && stat.ctime > 0 ? stat.ctime : null;
+        } catch { m.ctime = null; }
+        found.set(m.id, m);
+      }
     }
     return [...found.values()];
   }
@@ -953,23 +1073,109 @@ class PluginChineseNotes extends Plugin {
     } finally { run.key = null; this.activeRun = null; this.notifyUI(); }
   }
 
+  saveManagement(change) {
+    return this.commit((data) => ({ ...data, management: managementData(change(data.management)) }));
+  }
+
+  changeGroup(id, name) {
+    return this.saveManagement((current) => {
+      const m = managementData(current);
+      if (id !== null && !m.groups.some((g) => g.id === id)) throw new Error("分组已不存在，请重新打开管理窗口。");
+      if (name === null) {
+        m.groups = m.groups.filter((g) => g.id !== id);
+      } else {
+        name = name.trim();
+        if (!name || name.length > 30 || name === "未分组") throw new Error("请填写 1–30 字的分组名称，不能使用“未分组”。");
+        if (m.groups.some((g) => g.id !== id && g.name === name)) throw new Error("分组名称已存在。");
+        if (id === null) m.groups.push({ id: `g-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`, name });
+        else m.groups = m.groups.map((g) => g.id === id ? { ...g, name } : g);
+      }
+      return m;
+    });
+  }
+
+  managementAction(operation) {
+    return operation().catch((error) => {
+      new Notice(`插件中文备注：${error.message}`);
+      this.refreshAll();
+    });
+  }
+
+  scanManagementCatalog() {
+    if (this.managementScanPending || Date.now() - this.managementScanAt < 30000) return;
+    this.managementScanPending = true;
+    this.managementScanAt = Date.now();
+    this.installedManifests().then((items) => {
+      if (!this.stopped) {
+        this.managementCatalog = new Map(items.map((m) => [m.id, m]));
+        this.refreshAll();
+      }
+    }).catch(() => { /* Missing metadata leaves native names and unknown dates usable. */ })
+      .finally(() => { this.managementScanPending = false; });
+  }
+
+  releaseViewport(state, restore = true) {
+    const lock = state.viewportLock;
+    if (!lock) return;
+    state.win.clearTimeout(lock.timer);
+    if (lock.list.isConnected) lock.list.style.minHeight = lock.minHeight;
+    if (restore) this.restoreViewport(state);
+    state.viewportLock = null;
+  }
+
+  restoreViewport(state) {
+    const lock = state.viewportLock;
+    if (!lock || !lock.scroller.isConnected) return;
+    const row = [...lock.scroller.querySelectorAll(ROW_SELECTOR)].find((r) => r.dataset.pluginId === lock.id);
+    if (row && row.getClientRects().length) {
+      lock.scroller.scrollTop += row.getBoundingClientRect().top - lock.rowTop;
+    } else lock.scroller.scrollTop = lock.top;
+    for (const [el, top] of lock.sideScroll) if (el.isConnected) el.scrollTop = top;
+  }
+
+  holdViewport(doc, state, event) {
+    const target = event.target?.closest?.(".checkbox-container");
+    const row = target?.closest(ROW_SELECTOR);
+    if (!row) { if (event.type === "pointerdown") this.releaseViewport(state, false); return; }
+    if (event.type === "click" && state.viewportLock?.id === row.dataset.pluginId) return;
+    this.releaseViewport(state, false);
+    const scroller = row.closest(".vertical-tab-content");
+    if (!scroller) return;
+    const list = row.parentElement;
+    state.viewportLock = { scroller, list, minHeight: list.style.minHeight,
+      top: scroller.scrollTop, id: row.dataset.pluginId, rowTop: row.getBoundingClientRect().top,
+      sideScroll: [...doc.querySelectorAll(".vertical-tab-header")].map((el) => [el, el.scrollTop]) };
+    // Reserve the existing height while the host replaces its setting rows.
+    list.style.minHeight = `${list.getBoundingClientRect().height}px`;
+    state.viewportLock.timer = state.win.setTimeout(() => this.releaseViewport(state), 800);
+  }
+
   watchDocument(doc) {
     if (this.stopped || !doc?.body || this.documents.has(doc)) return;
     const win = doc.defaultView;
     if (!win) return;
-    const state = { win, observer: null };
+    const state = { win, observer: null, sides: new Map(), lists: new Map(), viewportLock: null };
+    state.hold = (event) => this.holdViewport(doc, state, event);
+    state.cancelHold = () => this.releaseViewport(state, false);
+    doc.addEventListener("pointerdown", state.hold, true);
+    doc.addEventListener("click", state.hold, true);
+    doc.addEventListener("wheel", state.cancelHold, { capture: true, passive: true });
+    doc.addEventListener("touchmove", state.cancelHold, { capture: true, passive: true });
+    state.keyCancel = (event) => {
+      if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key) ||
+          (["Enter", " "].includes(event.key) && event.target?.closest?.(".checkbox-container"))) state.cancelHold();
+    };
+    doc.addEventListener("keydown", state.keyCancel, true);
     state.observer = new win.MutationObserver((records) => {
-      // Only native plugin-row changes need a pass; ignore editor/note churn.
       const relevant = records.some((record) => {
         const target = record.target;
-        if (target.nodeType === 1 && target.closest(".pzn-note, .pzn-alias")) return false;
-        if (record.type === "attributes") return target.matches(ROW_SELECTOR);
-        if (target.nodeType === 1 && target.closest(ROW_SELECTOR)) return true;
+        if (target.nodeType === 1 && target.closest(".pzn-note, .pzn-alias, .pzn-manager, .pzn-side-alias")) return false;
+        if (record.type === "attributes") return target.matches(ROW_SELECTOR) || target.matches("[data-setting-id]");
+        if (target.nodeType === 1 && (target.closest(ROW_SELECTOR) || target.closest(SIDE_SELECTOR))) return true;
         return [...record.addedNodes, ...record.removedNodes].some((node) =>
-          node.nodeType === 1 && (node.matches(ROW_SELECTOR) || node.querySelector(".setting-item[data-plugin-id]")));
+          node.nodeType === 1 && (node.matches(ROW_SELECTOR + ", " + SIDE_SELECTOR) ||
+            node.querySelector('.setting-item[data-plugin-id], [data-section="community-plugins"]')));
       });
-      // MutationObserver already batches DOM changes. A background settings
-      // window can suspend animation frames, so refresh in this callback.
       if (relevant) this.refreshDocument(doc);
     });
     this.documents.set(doc, state);
@@ -987,22 +1193,152 @@ class PluginChineseNotes extends Plugin {
     try {
       for (const [row, mount] of this.mounts) {
         if (row.ownerDocument !== doc) continue;
-        if (!row.isConnected || !row.matches(ROW_SELECTOR) ||
-            row.dataset.pluginId !== mount.id || !mount.box.isConnected ||
-            !row.contains(mount.nameEl)) {
-          this.unmount(row, mount);
-        }
+        if (!row.isConnected || !row.matches(ROW_SELECTOR) || row.dataset.pluginId !== mount.id ||
+            !mount.box.isConnected || !row.contains(mount.nameEl)) this.unmount(row, mount);
       }
       for (const row of doc.querySelectorAll(ROW_SELECTOR)) {
         let mount = this.mounts.get(row);
         if (!mount) mount = this.mountRow(row);
         if (mount) this.updateRow(mount);
       }
+      this.refreshManagement(doc, state);
+      this.restoreViewport(state);
     } finally {
       state.observer.observe(doc.body, {
-        childList: true, subtree: true, attributes: true, attributeFilter: ["data-plugin-id"],
+        childList: true, subtree: true, attributes: true, attributeFilter: ["data-plugin-id", "data-setting-id"],
       });
     }
+  }
+
+  refreshManagement(doc, state) {
+    const m = this.data.management;
+    const lists = new Set([...doc.querySelectorAll(ROW_SELECTOR)].map((r) => r.parentElement));
+    for (const [parent, list] of state.lists) if (!parent.isConnected || !lists.has(parent)) {
+      this.cleanList(parent, list); state.lists.delete(parent);
+    }
+    for (const [parent, side] of state.sides) if (!parent.isConnected || !parent.matches(SIDE_SELECTOR)) {
+      this.cleanSide(parent, side); state.sides.delete(parent);
+    }
+    const sideParents = [...doc.querySelectorAll(SIDE_SELECTOR)];
+    if (lists.size || sideParents.length) this.scanManagementCatalog();
+    for (const parent of sideParents) {
+      let side = state.sides.get(parent);
+      if (!side) {
+        const sort = sortSelect(doc, "排序");
+        sort.wrapper.classList.add("pzn-side-sort", "pzn-manager");
+        sort.select.onchange = () => this.managementAction(() => this.saveManagement((v) => ({ ...v, sidebarSort: sort.select.value })));
+        side = { sort, items: new Map() }; state.sides.set(parent, side);
+      }
+      if (!side.sort.wrapper.isConnected) parent.before(side.sort.wrapper);
+      parent.classList.add("pzn-ordered");
+      side.sort.select.value = m.sidebarSort;
+      const items = [...parent.children].filter((e) => e.hasAttribute("data-setting-id"));
+      for (const [item, old] of side.items) if (!items.includes(item)) {
+        old.alias.remove(); item.style.order = old.order; side.items.delete(item);
+      }
+      const sortable = [];
+      for (const [index, item] of items.entries()) {
+        const title = item.querySelector(".vertical-tab-nav-item-title") || item;
+        let saved = side.items.get(item);
+        if (!saved) {
+          saved = { order: item.style.order, alias: element(doc, "span", "pzn-side-alias") };
+          side.items.set(item, saved);
+        }
+        if (!title.contains(saved.alias)) title.append(saved.alias);
+        const id = item.dataset.settingId, note = getNote(this.data, id);
+        if (saved.alias.textContent !== note.alias) saved.alias.textContent = note.alias;
+        saved.alias.hidden = !note.alias;
+        const meta = this.managementCatalog.get(id);
+        const name = meta?.name || [...title.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim() || id;
+        sortable.push({ item, name, ctime: meta?.ctime, index });
+      }
+      sortPlugins(sortable, m.sidebarSort).forEach(({ item }, index) => { item.style.order = String(index); });
+    }
+    for (const parent of lists) {
+      let list = state.lists.get(parent);
+      if (!list) {
+        const root = parent.closest(".setting-group") || parent;
+        const nativeSearch = root.querySelector('input[type="search"]')?.closest(".search-input-container");
+        // If a native query is already active, let the host own that filtered list.
+        if (nativeSearch?.querySelector("input").value) continue;
+        const toolbar = element(doc, "div", "pzn-manager pzn-list-toolbar");
+        const searchLabel = element(doc, "label", "pzn-list-search");
+        searchLabel.append(element(doc, "span", "pzn-sr-only", "搜索插件名称、中文别名"));
+        const search = element(doc, "input"); search.type = "search"; search.placeholder = "搜索插件名称、中文别名…";
+        searchLabel.append(search);
+        const controls = element(doc, "div", "pzn-list-controls");
+        const sort = sortSelect(doc, "排序");
+        const label = element(doc, "label", "pzn-group-toggle");
+        const toggle = element(doc, "input"); toggle.type = "checkbox";
+        label.append(toggle, "分组显示");
+        const manage = element(doc, "button", "", "管理分组");
+        manage.onclick = () => {
+          if ([...this.editors].some((editor) => editor instanceof GroupManager)) return;
+          const editor = new GroupManager(this); this.editors.add(editor); editor.open();
+        };
+        controls.append(sort.wrapper, label, manage); toolbar.append(searchLabel, controls);
+        const status = element(doc, "div", "pzn-manager pzn-list-status");
+        status.setAttribute("role", "status"); toolbar.append(status);
+        list = { toolbar, sort, search, toggle, status, nativeSearch, headers: [], items: new Map() };
+        state.lists.set(parent, list);
+        search.oninput = () => this.refreshDocument(doc);
+        sort.select.onchange = () => this.managementAction(() => this.saveManagement((v) => ({ ...v, listSort: sort.select.value })));
+        toggle.onchange = () => this.managementAction(() => this.saveManagement((v) => ({ ...v, grouped: toggle.checked })));
+      }
+      if (!parent.contains(list.toolbar)) parent.prepend(list.toolbar);
+      list.nativeSearch?.classList.add("pzn-native-search");
+      parent.classList.add("pzn-ordered", "pzn-plugin-list");
+      list.sort.select.value = m.listSort; list.toggle.checked = m.grouped;
+      const rows = [...parent.children].filter((e) => e.matches(ROW_SELECTOR));
+      for (const [row, saved] of list.items) if (!rows.includes(row)) {
+        row.style.order = saved.order; row.classList.remove("pzn-row-hidden"); list.items.delete(row);
+      }
+      const query = list.search.value.trim().toLowerCase();
+      const sortable = rows.map((row, index) => {
+        if (!list.items.has(row)) list.items.set(row, { order: row.style.order });
+        const id = row.dataset.pluginId, mount = this.mounts.get(row), meta = this.managementCatalog.get(id);
+        return { row, id, name: meta?.name || mount?.originalName || id, ctime: meta?.ctime, index };
+      });
+      const sorted = sortPlugins(sortable, m.listSort);
+      for (const h of list.headers) h.remove(); list.headers = [];
+      const buckets = m.grouped ? [...m.groups, { id: "", name: "未分组" }] : [{ id: null }];
+      let order = 0, matches = 0;
+      for (const group of buckets) {
+        const items = sorted.filter((item) => group.id === null || (m.assignments[item.id] || "") === group.id);
+        const found = items.filter((item) => !query || `${item.name} ${getNote(this.data, item.id).alias}`.toLowerCase().includes(query));
+        matches += found.length;
+        const collapsed = !query && m.collapsed.includes(group.id);
+        if (m.grouped && (!query || found.length)) {
+          const heading = element(doc, "button", "pzn-manager pzn-group-heading");
+          heading.type = "button"; heading.style.order = String(order++);
+          heading.setAttribute("aria-expanded", String(!collapsed));
+          heading.append(element(doc, "span", "pzn-group-arrow", collapsed ? "›" : "⌄"), element(doc, "span", "", group.name),
+            element(doc, "span", "pzn-group-count", String(found.length)));
+          heading.onclick = () => this.managementAction(() => this.saveManagement((v) => ({ ...v,
+            collapsed: v.collapsed.includes(group.id) ? v.collapsed.filter((id) => id !== group.id) : [...v.collapsed, group.id] })));
+          parent.append(heading); list.headers.push(heading);
+        }
+        for (const item of items) {
+          item.row.style.order = String(order++);
+          item.row.classList.toggle("pzn-row-hidden", collapsed || !found.includes(item));
+        }
+      }
+      list.status.textContent = matches === 0 ? "没有找到匹配的插件。" :
+        ["new", "old"].includes(m.listSort) ? "按文件夹创建时间排序；时间未知的插件置后。复制、恢复或同步可能改变时间。" : "";
+      list.status.hidden = !list.status.textContent;
+    }
+  }
+
+  cleanSide(parent, side) {
+    parent.classList.remove("pzn-ordered"); side.sort.wrapper.remove();
+    for (const [item, saved] of side.items) { saved.alias.remove(); item.style.order = saved.order; }
+  }
+
+  cleanList(parent, list) {
+    parent.classList.remove("pzn-ordered", "pzn-plugin-list");
+    list.toolbar.remove(); list.nativeSearch?.classList.remove("pzn-native-search");
+    for (const h of list.headers) h.remove();
+    for (const [row, saved] of list.items) { row.style.order = saved.order; row.classList.remove("pzn-row-hidden"); }
   }
 
   mountRow(row) {
@@ -1048,12 +1384,33 @@ class PluginChineseNotes extends Plugin {
       details.append(original);
       box.append(details);
     }
-    const mount = { id, row, nameEl, alias, edit, box, description, origin, original, marker, details };
+    const control = row.querySelector(".setting-item-control");
+    const groupLabel = element(doc, "label", "pzn-row-group pzn-manager");
+    groupLabel.append(element(doc, "span", "pzn-sr-only", `${originalName} 所属分组`));
+    const groupSelect = element(doc, "select", "dropdown"); groupLabel.append(groupSelect);
+    groupSelect.onclick = (event) => event.stopPropagation();
+    groupSelect.onchange = () => this.managementAction(() => this.saveManagement((m) => ({ ...m,
+      assignments: Object.assign(Object.create(null), m.assignments, { [id]: groupSelect.value }) })));
+    control?.prepend(groupLabel);
+    const mount = { id, row, originalName, nameEl, alias, edit, box, description, origin, original, marker, details, groupLabel, groupSelect };
     this.mounts.set(row, mount);
     return mount;
   }
 
   updateRow(mount) {
+    const m = this.data.management;
+    const options = JSON.stringify(m.groups);
+    if (mount.groupSelect.dataset.options !== options) {
+      mount.groupSelect.replaceChildren();
+      for (const g of [...m.groups, { id: "", name: "未分组" }]) {
+        const option = element(mount.row.ownerDocument, "option", "", g.name);
+        option.value = g.id; mount.groupSelect.append(option);
+      }
+      mount.groupSelect.dataset.options = options;
+    }
+    mount.groupSelect.value = m.assignments[mount.id] || "";
+    const control = mount.row.querySelector(".setting-item-control");
+    if (control && !control.contains(mount.groupLabel)) control.prepend(mount.groupLabel);
     // The declarative settings renderer may reset only the title's children.
     if (!mount.nameEl.contains(mount.alias)) {
       mount.nameEl.insertBefore(mount.alias, mount.nameEl.firstElementChild);
@@ -1095,6 +1452,7 @@ class PluginChineseNotes extends Plugin {
     mount.alias.remove();
     mount.edit.remove();
     mount.box.remove();
+    mount.groupLabel.remove();
     this.mounts.delete(row);
   }
 
@@ -1102,6 +1460,14 @@ class PluginChineseNotes extends Plugin {
     const state = this.documents.get(doc);
     if (!state) return;
     state.observer.disconnect();
+    this.releaseViewport(state);
+    doc.removeEventListener("pointerdown", state.hold, true);
+    doc.removeEventListener("click", state.hold, true);
+    doc.removeEventListener("wheel", state.cancelHold, true);
+    doc.removeEventListener("touchmove", state.cancelHold, true);
+    doc.removeEventListener("keydown", state.keyCancel, true);
+    for (const [parent, side] of state.sides) this.cleanSide(parent, side);
+    for (const [parent, list] of state.lists) this.cleanList(parent, list);
     for (const [row, mount] of this.mounts) {
       if (row.ownerDocument === doc) this.unmount(row, mount);
     }

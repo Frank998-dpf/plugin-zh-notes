@@ -1,3 +1,11 @@
+# 0.6.0
+
+- Show each installed plugin's original name and Chinese alias on separate lines in the settings sidebar.
+- Add independent name and plugin-folder creation-time sorting for the sidebar and installed list.
+- Add manual groups, group assignment, collapse, and alias-aware search to the installed list.
+- Keep the current plugin row in place when an enable/disable action redraws the native settings list.
+- Preserve existing notes and settings. Folder creation time is not an installation timestamp and may change after copying or restoring a vault.
+
 # 0.5.2
 
 - Fix clean-environment build verification: keep the authoritative source in `src/plugin.js` and generate `main.js` deterministically with no added dependencies.
