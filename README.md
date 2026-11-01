@@ -1,4 +1,6 @@
-# 插件索引 · Extension Index
+# Extension Index
+
+插件索引
 
 Add Chinese aliases, short explanations, and personal notes to installed community plugins in Obsidian's native plugin list.
 
