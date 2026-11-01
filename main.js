@@ -1,5 +1,5 @@
 /*!
- * 插件中文备注 / Chinese Notes
+ * 插件索引 / Extension Index
  * Original plugin implementation: Copyright (c) 2026 Frank998-dpf.
  * SPDX-License-Identifier: MIT
  *
@@ -728,7 +728,7 @@ class PluginChineseNotes extends Plugin {
     try {
       this.data = parseData(await this.loadData());
     } catch (error) {
-      new Notice(`插件中文备注：${error.message}`, 10000);
+      new Notice(`插件索引：${error.message}`, 10000);
       throw error;
     }
     this.register(() => this.dispose());
@@ -803,7 +803,7 @@ class PluginChineseNotes extends Plugin {
   openSettings(configure = false) {
     const settings = this.app.setting;
     if (typeof settings?.open !== "function" || typeof settings.openTabById !== "function") {
-      new Notice("请从设置中打开“插件中文备注”"); return;
+      new Notice("请从设置中打开“插件索引”"); return;
     }
     settings.open(); settings.openTabById(this.manifest.id);
     if (configure) this.settingsTab?.openConfiguration();
@@ -1096,7 +1096,7 @@ class PluginChineseNotes extends Plugin {
 
   managementAction(operation) {
     return operation().catch((error) => {
-      new Notice(`插件中文备注：${error.message}`);
+      new Notice(`插件索引：${error.message}`);
       this.refreshAll();
     });
   }

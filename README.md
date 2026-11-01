@@ -1,4 +1,4 @@
-# 插件中文备注 · Chinese Notes
+# 插件索引 · Extension Index
 
 Add Chinese aliases, short explanations, and personal notes to installed community plugins in Obsidian's native plugin list.
 
@@ -34,7 +34,7 @@ Do not treat a draft release or this repository's default branch as a published 
 1. Open **Settings → Community plugins → Installed plugins**. 中文别名和说明直接显示在已安装列表中；左侧插件设置入口显示原名和中文别名。
 2. 左右两处可分别选择排序。已安装插件列表支持按中文别名搜索；打开「分组显示」，通过「管理分组」新建分组，并在插件行选择归属。
 3. Click the small pencil next to a plugin name to edit your alias and description. Restore defaults through the same editor when needed.
-4. Open **Settings → Chinese Notes → 免费翻译** to fill only missing descriptions. Existing personal notes are preserved.
+4. Open **Settings → Extension Index → 免费翻译** to fill only missing descriptions. Existing personal notes are preserved.
 5. For AI, choose **AI 分析**, select a provider and model, enter your API key, and click **保存并测试**. After a successful test, click **开始分析**.
 
 AI provider presets include DeepSeek, Qwen (Beijing), GLM, SiliconFlow, Kimi (China), OpenAI, local Ollama, and a custom compatible endpoint. The base URL is under advanced options. Model names and account permissions can change; a custom model ID can be entered.
