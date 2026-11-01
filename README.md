@@ -70,7 +70,7 @@ The left settings navigation keeps original plugin names. Native plugin search d
 
 ## Development / 开发
 
-This is a plain CommonJS JavaScript plugin. `main.js` is both the reviewed source and the runtime asset; there is no transpilation, minification step, or generated executable download. The compact array near the top is the bundled text reference dataset, not obfuscated program logic.
+This is a plain CommonJS JavaScript plugin. `src/plugin.js` is the authoritative source. `npm run build` checks it and copies its exact bytes to the runtime asset `main.js`, including the embedded MIT notices. There is no transpilation, minification, or executable download. The compact array near the top is the bundled text reference dataset, not obfuscated program logic.
 
 ```bash
 npm ci
@@ -78,7 +78,7 @@ npm run build
 npm test
 ```
 
-`build` checks the syntax of the committed runtime source and does not modify it. Tests use Node's built-in runner. Node 22 or later is recommended; no npm runtime dependencies are required. CI verifies tests and that build verification leaves release assets unchanged. Release automation creates **drafts only**.
+`build` can regenerate `main.js` from a clean checkout even when the output is absent. Tests use Node's built-in runner, including a clean-directory regeneration check. Node 22 or later is recommended; no npm runtime dependencies are required. CI verifies tests and that regenerated release assets match the committed bytes. Release automation creates **drafts only**.
 
 Desktop validation uses a dedicated QA vault with disabled manifest-only fixture plugins. Automated checks do not substitute for the official preview scan or physical-device tests.
 

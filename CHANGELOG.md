@@ -1,3 +1,9 @@
+# 0.5.2
+
+- Fix clean-environment build verification: keep the authoritative source in `src/plugin.js` and generate `main.js` deterministically with no added dependencies.
+- Add a regression test that rebuilds with no existing runtime asset.
+- Preserve plugin behavior, offline reference data, personal notes, and API settings.
+
 # 0.5.1
 
 Initial community-directory submission. Community installation becomes available after directory approval.
