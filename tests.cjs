@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const os = require("node:os");
+const { execFileSync } = require("node:child_process");
 let requestHandler = async () => { throw new Error("测试未配置网络响应"); };
 
 const context = {
@@ -35,6 +37,21 @@ function plugin() {
   result.readManifest = async () => (await result.installedManifests())[0];
   return result;
 }
+
+test("官方清理输出文件后，构建仍可从独立源码精确重建并保留许可", () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-zh-build-"));
+  try {
+    fs.mkdirSync(path.join(temp, "src"));
+    fs.mkdirSync(path.join(temp, "scripts"));
+    fs.copyFileSync(path.join(__dirname, "src", "plugin.js"), path.join(temp, "src", "plugin.js"));
+    fs.copyFileSync(path.join(__dirname, "scripts", "build.cjs"), path.join(temp, "scripts", "build.cjs"));
+    assert.equal(fs.existsSync(path.join(temp, "main.js")), false);
+    execFileSync(process.execPath, [path.join(temp, "scripts", "build.cjs")], { cwd: temp });
+    assert.deepEqual(fs.readFileSync(path.join(temp, "main.js")), fs.readFileSync(path.join(__dirname, "main.js")));
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
 
 test("商店标准安装资产保留完整第三方 MIT 许可，不依赖额外文件安装", () => {
   const runtime = fs.readFileSync(path.join(__dirname, "main.js"), "utf8");
