@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+.obsidian/
+test-vault/
+work/
+data.json
+**/data.json
+.env
+.env.*
+*.log
+*.zip

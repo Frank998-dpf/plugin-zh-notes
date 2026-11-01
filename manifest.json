@@ -1,9 +1,10 @@
 {
   "id": "plugin-zh-notes",
   "name": "插件中文备注",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "minAppVersion": "1.14.5",
-  "description": "为已安装插件添加中文别名与说明，支持免配置联网翻译、可选 AI 分析和本地备注。",
-  "author": "Plugin Chinese Notes Contributors",
-  "isDesktopOnly": true
+  "description": "Add Chinese aliases, explanations, and personal notes to installed community plugins, with offline references and optional online translation and AI analysis.",
+  "author": "Frank998-dpf",
+  "isDesktopOnly": true,
+  "authorUrl": "https://github.com/Frank998-dpf"
 }

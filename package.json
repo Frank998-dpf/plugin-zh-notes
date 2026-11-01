@@ -1,0 +1,19 @@
+{
+  "name": "plugin-zh-notes",
+  "version": "0.5.1",
+  "description": "Chinese aliases and explanations for installed Obsidian community plugins.",
+  "private": true,
+  "license": "MIT",
+  "author": "Frank998-dpf",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Frank998-dpf/plugin-zh-notes.git"
+  },
+  "scripts": {
+    "build": "node --check main.js",
+    "test": "node --test tests.cjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

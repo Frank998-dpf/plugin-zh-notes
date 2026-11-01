@@ -36,6 +36,23 @@ function plugin() {
   return result;
 }
 
+test("商店标准安装资产保留完整第三方 MIT 许可，不依赖额外文件安装", () => {
+  const runtime = fs.readFileSync(path.join(__dirname, "main.js"), "utf8");
+  const licenseNotice = runtime.slice(0, runtime.indexOf('"use strict";'));
+  assert.match(licenseNotice, /Copyright \(c\) 2024 羽鳞君 \(miaoziguan\)/);
+  assert.match(licenseNotice, /Permission is hereby granted, free of charge/);
+  assert.match(licenseNotice, /THE SOFTWARE IS PROVIDED "AS IS"/);
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "manifest.json"), "utf8"));
+  assert.equal(manifest.id, "plugin-zh-notes");
+  assert.equal(manifest.author, "Frank998-dpf");
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
+  assert.ok(manifest.description.length <= 250 && manifest.description.endsWith("."));
+  const packageInfo = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+  const versions = JSON.parse(fs.readFileSync(path.join(__dirname, "versions.json"), "utf8"));
+  assert.equal(packageInfo.version, manifest.version);
+  assert.equal(versions[manifest.version], manifest.minAppVersion);
+});
+
 test("新安装可使用预置，未知插件为空", () => {
   const data = parseData(null);
   assert.equal(getNote(data, "dataview").alias, "笔记数据查询");
