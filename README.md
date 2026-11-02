@@ -6,7 +6,7 @@ This plugin helps you view and organize your installed third‑party Obsidian pl
 
 用于查阅与整理你已安装的 Obsidian 第三方插件，保留插件原名，同步展示中文别名与功能说明；支持设置分组和排序规则，内置 10000+插件释意思，也支持自定义和AI批量修改。
 
-![已安装插件列表：中文别名、独立排序与手动分组](docs/01-封面.png)
+![已安装插件列表：中文别名、独立排序与手动分组](docs/images/01-封面.png)
 
 *Obsidian 1.14.5 桌面版中的实际界面。截图来自独立测试库，示例插件和分组仅用于演示。*
 
@@ -26,7 +26,7 @@ This plugin helps you view and organize your installed third‑party Obsidian pl
 - 内置 10000+ 条离线中文参考资料。资料可能存在翻译不准确或内容滞后的情况，欢迎通过反馈渠道指正。
 - 可按需联网翻译缺失的插件介绍，或是调用你自行配置的 AI 服务解析插件公开文档。相关功能需手动启用，调用 AI 服务可能产生费用。
   
-![已安装插件列表：中文别名、独立排序与手动分组](docs/PixPin_2026-11-02_21-50-00.png.png)
+![已安装插件列表：中文别名、独立排序与手动分组](docs/images/PixPin_2026-11-02_21-50-00.png)
 
 *免费翻译只处理缺少中文说明的插件，不覆盖个人备注；AI 分析需要自行配置服务。截图同样来自独立测试库。*
 
