@@ -1,3 +1,12 @@
+# 0.6.2
+
+- Expand offline Chinese references from 6,329 to 9,754 entries, covering all 9,741 plugins with more than 10 cumulative downloads in the 2026-11-02 official-directory snapshot and retaining 13 earlier references outside that selection.
+- Add 3,425 descriptions and aliases written from official plugin introductions, with consistent Obsidian terms and preserved service requirements; keep personal notes and generated caches as higher-priority data.
+- Remove repeated original names from displayed aliases, retain inline accented aliases in the installed list, and simplify the sidebar sorting label.
+- Hide generated-source status rows in the installed list and omit recognized repetitive description tails; original saved data and editor provenance remain available.
+- Retry untranslated multiword names by translating their parts, normalize Vault terminology, preserve an existing alias when translation fails, and report partial completion explicitly.
+- Add coverage and translation regression checks. No new runtime dependencies; desktop Obsidian 1.14.5 or newer remains required.
+
 # 0.6.1
 
 - Rename the plugin to Extension Index (插件索引) while keeping the existing plugin ID and user data.

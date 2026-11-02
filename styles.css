@@ -439,6 +439,7 @@
 .pzn-native-search,
 .pzn-plugin-list > .pzn-row-hidden,
 .pzn-side-alias[hidden],
+.pzn-alias[hidden],
 .pzn-list-status[hidden] {
   display: none !important;
 }

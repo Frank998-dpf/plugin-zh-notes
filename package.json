@@ -1,6 +1,6 @@
 {
   "name": "plugin-zh-notes",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Chinese aliases and explanations for installed Obsidian community plugins.",
   "private": true,
   "license": "MIT",
