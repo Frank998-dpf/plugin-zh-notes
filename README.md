@@ -2,9 +2,21 @@
 
 插件索引
 
-Understand and organize installed community plugins with Chinese aliases, explanations, personal notes, search, sorting, and groups.
+Give your installed Obsidian plugins Chinese names and clear explanations, then find and organize them without losing their original names.
 
 插件索引（Extension Index）帮助你看懂、查找和整理已安装的 Obsidian 第三方插件。它直接增强「设置 → 第三方插件 → 已安装插件」页面，保留插件原名，同时显示中文别名和用途说明。
+
+![已安装插件列表：中文别名、独立排序与手动分组](docs/images/installed-list.png)
+
+*Obsidian 1.14.5 桌面版中的实际界面。截图来自独立测试库，示例插件和分组仅用于演示。*
+
+## 三步上手 / See it in action
+
+1. 打开「设置 → 第三方插件 → 已安装插件」，直接查看原名旁的中文别名和下方的用途说明。左侧插件入口也会分行显示原名与别名。
+2. 在已安装列表搜索原名或中文别名；按需要调整左右两处的排序，或开启「分组显示」并将插件归入自己的分组。
+3. 点击插件名称旁的小铅笔，写下自己的别名和备注。个人修改优先显示，也可以在编辑窗口恢复预置内容。
+
+例如，截图中的 `Dataview` 显示为「笔记数据查询」，并被放入「日常工具」分组；这只是测试库里的示例归类，不会预设你的分组。
 
 ## 主要功能
 
@@ -13,6 +25,10 @@ Understand and organize installed community plugins with Chinese aliases, explan
 - 左侧插件入口与已安装列表可分别设置排序；已安装插件还支持手动分组。
 - 内置 6,329 条离线中文参考资料。资料可能存在错译或过时内容，欢迎通过反馈渠道指出。
 - 可选择联网翻译缺少的说明，或使用自行配置的 AI 服务分析公开插件资料。这些功能由你主动启动；AI 服务可能收费。
+
+![可选的缺失说明翻译页面](docs/images/translation-settings.png)
+
+*免费翻译只处理缺少中文说明的插件，不覆盖个人备注；AI 分析需要自行配置服务。截图同样来自独立测试库。*
 
 离线资料和个人备注无需联网。本插件不会读取或发送你的笔记正文或个人备注；联网翻译会发送插件名称和描述，AI 分析可附带公开 README 摘录。仅支持 Obsidian 1.14.5 及以上桌面版，界面目前为中文。按时间排序使用插件文件夹的创建时间，它不一定等于安装时间。本插件不负责安装、更新或卸载其他插件。
 
