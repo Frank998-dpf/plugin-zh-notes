@@ -99,8 +99,8 @@ test("已核对的错译得到修正，音乐语境和功能不明条目正确�
   assert.equal(getNote(data, "auto-journal").alias, "日记自动补建");
   assert.match(getNote(data, "midi-logger").description, /音符/);
   assert.match(getNote(data, "tegaki").description, /发送至外部API/);
-  assert.equal(getNote(data, "granite").description, "");
-  assert.equal(getNote(data, "blinks").description, "");
+  assert.match(getNote(data, "granite").description, /未.*说明.*具体/);
+  assert.match(getNote(data, "blinks").description, /块链接/);
 });
 
 test("新增内置条目仍服从个人备注与已有生成缓存的优先级", () => {
@@ -594,4 +594,70 @@ test("用户主动滚动时释放高度占位，不把用户拉回旧位置", ()
   assert.equal(scroller.scrollTop, 400);
   assert.equal(state.viewportLock, null);
   assert.equal(cleared, true);
+});
+
+const presentation = vm.runInContext("({ displayAlias, displayDescription })", context);
+test("列表别名移除重复原名并保留中文，不误删相似品牌名", () => {
+  assert.equal(presentation.displayAlias("Notebook Navigator: 双栏文件浏览器", "Notebook Navigator"), "双栏文件浏览器");
+  assert.equal(presentation.displayAlias("Extension Index: 社区插件中文别名与笔记", "Extension Index"), "社区插件中文别名与笔记");
+  assert.equal(presentation.displayAlias("Notebook Navigator", "Notebook Navigator"), "");
+  assert.equal(presentation.displayAlias("Floating TOC", "floating toc"), "");
+  assert.equal(presentation.displayAlias("FooBar 中文助手", "Foo"), "FooBar 中文助手");
+  assert.equal(presentation.displayAlias("中文别名", "Example"), "中文别名");
+  assert.equal(presentation.displayAlias("", "Example"), "");
+});
+test("仅过滤固定的冗余尾句，保留功能、风险说明与原始缓存", () => {
+  const raw = "提供编辑工具。除此之外，没有更多功能细节可供说明。";
+  assert.equal(presentation.displayDescription(raw), "提供编辑工具。");
+  assert.equal(presentation.displayDescription("支持自定义排序。除插件简介外，资料未提供更多细节。"), "支持自定义排序。");
+  assert.equal(presentation.displayDescription("支持编辑。除插件自述外，没有更多功能细节可供说明。"), "支持编辑。");
+  assert.equal(presentation.displayDescription("需要联网，可能产生费用。"), "需要联网，可能产生费用。");
+  assert.equal(presentation.displayDescription("除此之外，支持导出。"), "除此之外，支持导出。");
+  const data = parseData(null);
+  data.entries.example = { alias: "Example: 示例", description: raw };
+  presentation.displayDescription(getNote(data, "example").description);
+  assert.equal(data.entries.example.description, raw);
+});
+
+test("整名原样返回时分词翻译，并统一 Vault 术语", async () => {
+  const p = plugin(), calls = [];
+  p.translate = async text => { calls.push(text); return text === "Workbench" ? "工作台" : text; };
+  assert.equal(await p.translateName("Vault Workbench", { cancelled: false }), "笔记库工作台");
+  assert.deepEqual(calls, ["Vault Workbench", "Workbench"]);
+  p.translate = async () => "金库工作台";
+  assert.equal(await p.translateName("Vault Workbench", { cancelled: false }), "笔记库工作台");
+});
+test("分词翻译保留品牌，整名成功不重试，纯品牌不伪造中文", async () => {
+  const p = plugin();
+  p.translate = async text => text === "Tools" ? "工具" : text;
+  assert.equal(await p.translateName("Acme Tools", { cancelled: false }), "Acme 工具");
+  assert.equal(await p.translateName("Acme", { cancelled: false }), "");
+  let calls = 0; p.translate = async () => { calls++; return "文件导航器"; };
+  assert.equal(await p.translateName("File Navigator", { cancelled: false }), "文件导航器");
+  assert.equal(calls, 1);
+});
+test("名称后备翻译限制请求数量且尊重取消", async () => {
+  const p = plugin(); let calls = 0;
+  p.translate = async text => { calls++; return text; };
+  assert.equal(await p.translateName("a b c d e f g h i", { cancelled: false }), "");
+  assert.equal(calls, 1);
+  await assert.rejects(p.translateName("Vault Workbench", { cancelled: true }), /停止/);
+});
+test("名称仍无中文时保留已有别名并明确部分成功", async () => {
+  const p = plugin(); p.installedManifests = async () => [fixtureManifest];
+  p.data.entries.calendar = { alias: "我的日历", description: "个人说明" };
+  p.translate = async text => text === fixtureManifest.description ? "查看日期" : text;
+  const result = await p.generateOne("calendar", "translation");
+  assert.equal(result.alias, "我的日历");
+  assert.match(result.warning, /名称未译成中文/);
+  assert.equal(getNote(p.data, "calendar").description, "个人说明");
+});
+
+test("官方快照中累计下载超过10次的插件均有离线资料，覆盖集合精确匹配", () => {
+  // 2026-11-02 catalog/stats snapshot; preserve 13 earlier references outside the selection.
+  const retained = new Set(["biblib", "calendarplanner", "claudian", "claudian-plus", "i18n", "istart-note-ai", "maguilanote", "multi-ai-assistant", "notioneer", "opencode", "pkmer", "relation-weaver", "task-manager-bases-view"]);
+  const ids = [...Plugin.testAPI.BUILTINS.keys()].filter(id => !retained.has(id)).sort();
+  assert.equal(ids.length, 9741);
+  assert.equal(require("node:crypto").createHash("sha256").update(ids.join("\n")).digest("hex"),
+    "b93bea57a36258474a8294ca67afd7a74057dda7ae81ac0c6a06ccfce3889550");
 });
