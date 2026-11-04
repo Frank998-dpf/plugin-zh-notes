@@ -1181,20 +1181,31 @@ class PluginChineseNotes extends Plugin {
   }
 
   holdViewport(doc, state, event) {
-    const target = event.target?.closest?.(".checkbox-container");
+    const button = event.target?.closest?.("button");
+    const uninstall = button && /卸载|uninstall/i.test([button.textContent, button.getAttribute("aria-label"), button.getAttribute("title")].join(" "));
+    const target = event.target?.closest?.(".checkbox-container") || (uninstall ? button : null);
     const row = target?.closest(ROW_SELECTOR);
-    if (!row) { if (event.type === "pointerdown") this.releaseViewport(state, false); return; }
+    if (!row) {
+      if (event.type === "pointerdown" && !state.viewportLock?.uninstall) this.releaseViewport(state, false);
+      return;
+    }
     if (event.type === "click" && state.viewportLock?.id === row.dataset.pluginId) return;
     this.releaseViewport(state, false);
     const scroller = row.closest(".vertical-tab-content");
     if (!scroller) return;
     const list = row.parentElement;
+    const rowTop = row.getBoundingClientRect().top;
+    const neighbors = uninstall ? [...list.querySelectorAll(ROW_SELECTOR)]
+      .filter((candidate) => candidate !== row && candidate.getClientRects().length)
+      .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top) : [];
+    const anchor = uninstall ? neighbors.find((candidate) => candidate.getBoundingClientRect().top > rowTop) || neighbors.at(-1) : row;
     state.viewportLock = { scroller, list, minHeight: list.style.minHeight,
-      top: scroller.scrollTop, id: row.dataset.pluginId, rowTop: row.getBoundingClientRect().top,
+      top: scroller.scrollTop, id: anchor?.dataset.pluginId, rowTop: anchor?.getBoundingClientRect().top,
+      uninstall, removedId: row.dataset.pluginId,
       sideScroll: [...doc.querySelectorAll(".vertical-tab-header")].map((el) => [el, el.scrollTop]) };
     // Reserve the existing height while the host replaces its setting rows.
     list.style.minHeight = `${list.getBoundingClientRect().height}px`;
-    state.viewportLock.timer = state.win.setTimeout(() => this.releaseViewport(state), 800);
+    state.viewportLock.timer = state.win.setTimeout(() => this.releaseViewport(state), uninstall ? 15000 : 800);
   }
 
   watchDocument(doc) {
@@ -1250,6 +1261,9 @@ class PluginChineseNotes extends Plugin {
       }
       this.refreshManagement(doc, state);
       this.restoreViewport(state);
+      const lock = state.viewportLock;
+      if (lock?.uninstall && ![...lock.scroller.querySelectorAll(ROW_SELECTOR)]
+        .some((row) => row.dataset.pluginId === lock.removedId)) this.releaseViewport(state);
     } finally {
       state.observer.observe(doc.body, {
         childList: true, subtree: true, attributes: true, attributeFilter: ["data-plugin-id", "data-setting-id"],
