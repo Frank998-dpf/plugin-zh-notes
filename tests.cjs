@@ -582,7 +582,7 @@ test("开关重绘按插件行锚点恢复视口，同时恢复侧栏位置", ()
   assert.equal(side.scrollTop, 60);
 });
 
-test("卸载时锚定相邻插件，确认弹窗点击不丢失视口保护", () => {
+test("无文字的原生行图标也能锚定相邻插件，弹窗点击不丢失视口保护", () => {
   const p = plugin();
   const row = { dataset: { pluginId: "removed" }, getClientRects: () => [{}],
     getBoundingClientRect: () => ({ top: 100 }) };
@@ -593,11 +593,15 @@ test("卸载时锚定相邻插件，确认弹窗点击不丢失视口保护", ()
   row.parentElement = list;
   row.closest = () => scroller;
   const scroller = { isConnected: true, scrollTop: 200, querySelectorAll: () => [row, next] };
-  const button = { textContent: "卸载", getAttribute: () => null, closest: () => row };
+  const control = { closest: () => row };
+  const icon = { textContent: "", closest: (selector) => selector === ".setting-item-control" ? control : null };
   const state = { win: { setTimeout: (_fn, delay) => { assert.equal(delay, 15000); return 1; }, clearTimeout: () => {} }, viewportLock: null };
   const doc = { querySelectorAll: () => [] };
-  p.holdViewport(doc, state, { type: "pointerdown", target: { closest: (selector) => selector === "button" ? button : null } });
+  p.holdViewport(doc, state, { type: "pointerdown", target: { closest: (selector) => selector === "button, .clickable-icon" ? icon : null } });
   assert.equal(state.viewportLock.id, "next");
+  const lock = state.viewportLock;
+  p.holdViewport(doc, state, { type: "click", target: { closest: (selector) => selector === "button, .clickable-icon" ? icon : null } });
+  assert.equal(state.viewportLock, lock);
   p.holdViewport(doc, state, { type: "pointerdown", target: { closest: () => null } });
   assert.equal(state.viewportLock.id, "next");
   scroller.querySelectorAll = () => [next];

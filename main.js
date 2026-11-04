@@ -1181,31 +1181,32 @@ class PluginChineseNotes extends Plugin {
   }
 
   holdViewport(doc, state, event) {
-    const button = event.target?.closest?.("button");
-    const uninstall = button && /卸载|uninstall/i.test([button.textContent, button.getAttribute("aria-label"), button.getAttribute("title")].join(" "));
-    const target = event.target?.closest?.(".checkbox-container") || (uninstall ? button : null);
+    const checkbox = event.target?.closest?.(".checkbox-container");
+    const action = event.target?.closest?.("button, .clickable-icon");
+    const removalCandidate = !checkbox && action?.closest(".setting-item-control");
+    const target = checkbox || removalCandidate;
     const row = target?.closest(ROW_SELECTOR);
     if (!row) {
       if (event.type === "pointerdown" && !state.viewportLock?.uninstall) this.releaseViewport(state, false);
       return;
     }
-    if (event.type === "click" && state.viewportLock?.id === row.dataset.pluginId) return;
+    if (event.type === "click" && state.viewportLock?.removedId === row.dataset.pluginId) return;
     this.releaseViewport(state, false);
     const scroller = row.closest(".vertical-tab-content");
     if (!scroller) return;
     const list = row.parentElement;
     const rowTop = row.getBoundingClientRect().top;
-    const neighbors = uninstall ? [...list.querySelectorAll(ROW_SELECTOR)]
+    const neighbors = removalCandidate ? [...list.querySelectorAll(ROW_SELECTOR)]
       .filter((candidate) => candidate !== row && candidate.getClientRects().length)
       .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top) : [];
-    const anchor = uninstall ? neighbors.find((candidate) => candidate.getBoundingClientRect().top > rowTop) || neighbors.at(-1) : row;
+    const anchor = removalCandidate ? neighbors.find((candidate) => candidate.getBoundingClientRect().top > rowTop) || neighbors.at(-1) : row;
     state.viewportLock = { scroller, list, minHeight: list.style.minHeight,
       top: scroller.scrollTop, id: anchor?.dataset.pluginId, rowTop: anchor?.getBoundingClientRect().top,
-      uninstall, removedId: row.dataset.pluginId,
+      uninstall: !!removalCandidate, removedId: row.dataset.pluginId,
       sideScroll: [...doc.querySelectorAll(".vertical-tab-header")].map((el) => [el, el.scrollTop]) };
     // Reserve the existing height while the host replaces its setting rows.
     list.style.minHeight = `${list.getBoundingClientRect().height}px`;
-    state.viewportLock.timer = state.win.setTimeout(() => this.releaseViewport(state), uninstall ? 15000 : 800);
+    state.viewportLock.timer = state.win.setTimeout(() => this.releaseViewport(state), removalCandidate ? 15000 : 800);
   }
 
   watchDocument(doc) {
@@ -1263,7 +1264,10 @@ class PluginChineseNotes extends Plugin {
       this.restoreViewport(state);
       const lock = state.viewportLock;
       if (lock?.uninstall && ![...lock.scroller.querySelectorAll(ROW_SELECTOR)]
-        .some((row) => row.dataset.pluginId === lock.removedId)) this.releaseViewport(state);
+        .some((row) => row.dataset.pluginId === lock.removedId)) {
+        state.win.clearTimeout(lock.timer);
+        lock.timer = state.win.setTimeout(() => this.releaseViewport(state), 250);
+      }
     } finally {
       state.observer.observe(doc.body, {
         childList: true, subtree: true, attributes: true, attributeFilter: ["data-plugin-id", "data-setting-id"],
