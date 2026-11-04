@@ -1,3 +1,8 @@
+# 0.6.3
+
+- Keep the installed-plugin list in place when uninstalling a plugin, including after the confirmation dialog closes.
+- Preserve the sidebar scroll position during the resulting list update.
+
 # 0.6.2
 
 - Expand offline Chinese references from 6,329 to 9,754 entries, covering all 9,741 plugins with more than 10 cumulative downloads in the 2026-11-02 official-directory snapshot and retaining 13 earlier references outside that selection.

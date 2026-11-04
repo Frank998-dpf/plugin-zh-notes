@@ -582,6 +582,30 @@ test("开关重绘按插件行锚点恢复视口，同时恢复侧栏位置", ()
   assert.equal(side.scrollTop, 60);
 });
 
+test("卸载时锚定相邻插件，确认弹窗点击不丢失视口保护", () => {
+  const p = plugin();
+  const row = { dataset: { pluginId: "removed" }, getClientRects: () => [{}],
+    getBoundingClientRect: () => ({ top: 100 }) };
+  const next = { dataset: { pluginId: "next" }, getClientRects: () => [{}],
+    getBoundingClientRect: () => ({ top: 180 }) };
+  const list = { style: { minHeight: "" }, getBoundingClientRect: () => ({ height: 900 }),
+    querySelectorAll: () => [row, next] };
+  row.parentElement = list;
+  row.closest = () => scroller;
+  const scroller = { isConnected: true, scrollTop: 200, querySelectorAll: () => [row, next] };
+  const button = { textContent: "卸载", getAttribute: () => null, closest: () => row };
+  const state = { win: { setTimeout: (_fn, delay) => { assert.equal(delay, 15000); return 1; }, clearTimeout: () => {} }, viewportLock: null };
+  const doc = { querySelectorAll: () => [] };
+  p.holdViewport(doc, state, { type: "pointerdown", target: { closest: (selector) => selector === "button" ? button : null } });
+  assert.equal(state.viewportLock.id, "next");
+  p.holdViewport(doc, state, { type: "pointerdown", target: { closest: () => null } });
+  assert.equal(state.viewportLock.id, "next");
+  scroller.querySelectorAll = () => [next];
+  next.getBoundingClientRect = () => ({ top: 100 });
+  p.restoreViewport(state);
+  assert.equal(scroller.scrollTop, 120);
+});
+
 test("用户主动滚动时释放高度占位，不把用户拉回旧位置", () => {
   const p = plugin();
   const list = { isConnected: true, style: { minHeight: "900px" } };
