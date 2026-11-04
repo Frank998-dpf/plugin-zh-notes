@@ -1,3 +1,8 @@
+# 0.6.4
+
+- Keep the installed-plugin list at the same position after confirming uninstall from a native icon button.
+- Continue viewport restoration briefly after Obsidian removes the plugin row.
+
 # 0.6.3
 
 - Keep the installed-plugin list in place when uninstalling a plugin, including after the confirmation dialog closes.
