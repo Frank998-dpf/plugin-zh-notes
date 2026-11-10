@@ -1,3 +1,10 @@
+# 0.6.5
+
+- Update 8,833 offline Chinese plugin aliases and descriptions from the supplied revised translation list, while retaining previously reviewed overrides and personal notes.
+- Remove the repeated Obsidian review-status sentence from remaining offline descriptions.
+- Correct additional product names, technical terms, and unclear aliases, including Granola, Kindle, MathVoice, and video aspect ratios.
+- Retain the plugin-list sorting and viewport fixes published in 0.6.4.
+
 # 0.6.4
 
 - Keep the installed-plugin list at the same position after confirming uninstall from a native icon button.

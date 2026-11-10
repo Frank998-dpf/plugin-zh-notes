@@ -88,6 +88,7 @@ test("扩充的离线资料具有中文别名和说明，长度合法且没有�
     assert.match(alias, /[\u3400-\u9fff]/, id);
     assert.match(description, /[\u3400-\u9fff]/, id);
     assert.doesNotMatch(alias + description, /MYMEMORY WARNING|QUERY LENGTH|translation failed|降价|乳胶|保管库|保险库|法学硕士|[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/i, id);
+    assert.doesNotMatch(description, /该插件尚未经 Obsidian 团队人工审核/, id);
   }
 });
 
@@ -99,7 +100,9 @@ test("已核对的错译得到修正，音乐语境和功能不明条目正确�
   assert.equal(getNote(data, "auto-journal").alias, "日记自动补建");
   assert.match(getNote(data, "midi-logger").description, /音符/);
   assert.match(getNote(data, "tegaki").description, /发送至外部API/);
-  assert.match(getNote(data, "granite").description, /未.*说明.*具体/);
+  assert.equal(getNote(data, "granite").description, "辅助强化目标管理并改进笔记。");
+  assert.equal(getNote(data, "granola-sync-plus").alias, "Granola AI 会议笔记同步");
+  assert.match(getNote(data, "zoyclip").description, /9:16 竖屏短视频/);
   assert.match(getNote(data, "blinks").description, /块链接/);
 });
 
@@ -388,6 +391,8 @@ test("AI 请求使用配置的模型，缓存可重载且不存 API 密钥", asy
     return { text: "# Calendar\nDisplay dates." };
   };
   const result = await p.generateOne("calendar", "ai");
+  assert.match(body.messages[0].content, /突出主要功能/);
+  assert.match(body.messages[0].content, /不添加资料不足/);
   assert.equal(body.model, "sample-model");
   assert.ok(body.messages[1].content.includes("Display dates"));
   assert.equal(result.source, "https://github.com/example/calendar");
@@ -571,6 +576,31 @@ test("读取插件文件夹创建时间失败时仍返回插件，不以修改�
   assert.equal(items[1].ctime, null);
 });
 
+test("新插件出现时跳过扫描间隔，扫描进行中则补扫一次", async () => {
+  const p = plugin();
+  p.managementCatalog = new Map();
+  p.managementScanAt = Date.now();
+  p.managementScanPending = false;
+  p.managementRescanRequested = false;
+  p.stopped = false;
+  let finishFirst;
+  let scans = 0;
+  p.installedManifests = () => {
+    scans++;
+    return scans === 1 ? new Promise((resolve) => { finishFirst = resolve; }) :
+      Promise.resolve([{ id: "new-plugin", ctime: 200 }]);
+  };
+  p.scanManagementCatalog();
+  assert.equal(scans, 0);
+  p.scanManagementCatalog(true);
+  assert.equal(scans, 1);
+  p.scanManagementCatalog(true);
+  finishFirst([{ id: "old-plugin", ctime: 100 }]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(scans, 2);
+  assert.equal(p.managementCatalog.get("new-plugin").ctime, 200);
+});
+
 test("开关重绘按插件行锚点恢复视口，同时恢复侧栏位置", () => {
   const p = plugin();
   const scroller = { isConnected: true, scrollTop: 200,
@@ -637,6 +667,11 @@ test("列表别名移除重复原名并保留中文，不误删相似品牌名",
 test("仅过滤固定的冗余尾句，保留功能、风险说明与原始缓存", () => {
   const raw = "提供编辑工具。除此之外，没有更多功能细节可供说明。";
   assert.equal(presentation.displayDescription(raw), "提供编辑工具。");
+  assert.equal(presentation.displayDescription(getNote(parseData(null), "advanced-multi-column").description), "创建交互式多栏布局。");
+  assert.equal(presentation.displayDescription("提供中文说明。以上依据插件简介，README 摘要为空，具体用法与范围未在资料中说明。"), "提供中文说明。");
+  assert.equal(presentation.displayDescription("改进表格导航。资料中没有更详细的说明，具体用法尚不明确。"), "改进表格导航。");
+  assert.equal(presentation.displayDescription("提供选项卡设置。由于缺少 README 说明，更详细的功能与兼容性信息无法确认。"), "提供选项卡设置。");
+  assert.equal(presentation.displayDescription("通过 WebDAV 同步。该插件说明只提到同步用途，未提供更多功能细节或版本兼容性信息。"), "通过 WebDAV 同步。");
   assert.equal(presentation.displayDescription("支持自定义排序。除插件简介外，资料未提供更多细节。"), "支持自定义排序。");
   assert.equal(presentation.displayDescription("支持编辑。除插件自述外，没有更多功能细节可供说明。"), "支持编辑。");
   assert.equal(presentation.displayDescription("需要联网，可能产生费用。"), "需要联网，可能产生费用。");
@@ -647,38 +682,36 @@ test("仅过滤固定的冗余尾句，保留功能、风险说明与原始缓�
   assert.equal(data.entries.example.description, raw);
 });
 
-test("整名原样返回时分词翻译，并统一 Vault 术语", async () => {
-  const p = plugin(), calls = [];
-  p.translate = async text => { calls.push(text); return text === "Workbench" ? "工作台" : text; };
-  assert.equal(await p.translateName("Vault Workbench", { cancelled: false }), "笔记库工作台");
-  assert.deepEqual(calls, ["Vault Workbench", "Workbench"]);
-  p.translate = async () => "金库工作台";
-  assert.equal(await p.translateName("Vault Workbench", { cancelled: false }), "笔记库工作台");
+test("免费翻译只处理说明，不凭插件名称直译功能别名", async () => {
+  const p = plugin(); p.installedManifests = async () => [{ ...fixtureManifest, id: "unknown-plugin", name: "Age Crypto" }];
+  const calls = [];
+  p.translate = async text => { calls.push(text); return "使用 age 加密笔记。"; };
+  const result = await p.generateOne("unknown-plugin", "translation");
+  assert.equal(result.alias, "");
+  assert.deepEqual(calls, [fixtureManifest.description]);
+  assert.match(result.warning, /主要功能/);
 });
-test("分词翻译保留品牌，整名成功不重试，纯品牌不伪造中文", async () => {
-  const p = plugin();
-  p.translate = async text => text === "Tools" ? "工具" : text;
-  assert.equal(await p.translateName("Acme Tools", { cancelled: false }), "Acme 工具");
-  assert.equal(await p.translateName("Acme", { cancelled: false }), "");
-  let calls = 0; p.translate = async () => { calls++; return "文件导航器"; };
-  assert.equal(await p.translateName("File Navigator", { cancelled: false }), "文件导航器");
-  assert.equal(calls, 1);
-});
-test("名称后备翻译限制请求数量且尊重取消", async () => {
-  const p = plugin(); let calls = 0;
-  p.translate = async text => { calls++; return text; };
-  assert.equal(await p.translateName("a b c d e f g h i", { cancelled: false }), "");
-  assert.equal(calls, 1);
-  await assert.rejects(p.translateName("Vault Workbench", { cancelled: true }), /停止/);
-});
-test("名称仍无中文时保留已有别名并明确部分成功", async () => {
+test("免费翻译保留已有个人别名", async () => {
   const p = plugin(); p.installedManifests = async () => [fixtureManifest];
   p.data.entries.calendar = { alias: "我的日历", description: "个人说明" };
-  p.translate = async text => text === fixtureManifest.description ? "查看日期" : text;
+  p.translate = async () => "查看日期";
   const result = await p.generateOne("calendar", "translation");
   assert.equal(result.alias, "我的日历");
-  assert.match(result.warning, /名称未译成中文/);
+  assert.equal(result.warning, "");
   assert.equal(getNote(p.data, "calendar").description, "个人说明");
+});
+
+test("已核实的内置别名突出功能，纠正字面误译", () => {
+  const data = parseData(null);
+  assert.equal(getNote(data, "age-crypto").alias, "age 笔记加解密");
+  assert.equal(getNote(data, "age-crypto").description, "使用 age 加密或解密笔记。");
+  assert.equal(getNote(data, "alignment").alias, "文字居中与右对齐");
+  assert.doesNotMatch(getNote(data, "alignment").description, /两端对齐/);
+  assert.equal(getNote(data, "aside").alias, "人机协作旁注");
+  assert.equal(getNote(data, "table-editor-obsidian").alias, "表格编辑与导航");
+  assert.equal(getNote(data, "ai-commit").alias, "AI 提交说明生成");
+  assert.equal(getNote(data, "airtable-tabula").alias, "Airtable 式本地表格");
+  assert.equal(getNote(data, "asciidoc-live").alias, "AsciiDoc 实时预览");
 });
 
 test("官方快照中累计下载超过10次的插件均有离线资料，覆盖集合精确匹配", () => {
