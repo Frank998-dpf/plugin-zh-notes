@@ -495,7 +495,10 @@ function isChineseDescription(text) {
 }
 
 function needsTranslation(data, manifest) {
-  return !Object.hasOwn(data.entries, manifest.id) && !getNote(data, manifest.id).description && !isChineseDescription(manifest.description);
+  if (Object.hasOwn(data.entries, manifest.id)) return false;
+  const note = getNote(data, manifest.id);
+  return Boolean(manifest.name && !displayAlias(note.alias, manifest.name) && !HAN.test(manifest.name)) ||
+    (!note.description && !isChineseDescription(manifest.description));
 }
 
 function serviceError(status, body) {
@@ -893,10 +896,10 @@ class ChineseNotesSettings extends PluginSettingTab {
       panel.setAttribute("aria-labelledby", tab.id); panels[mode] = panel;
     }
     root.append(tabs, panels.translation, panels.ai);
-    panels.translation.append(element(doc, "p", "pzn-muted pzn-mode-caption", "自动翻译缺少的中文介绍，不覆盖你的个人备注。"));
+    panels.translation.append(element(doc, "p", "pzn-muted pzn-mode-caption", "自动补全缺少的中文名称和介绍，不覆盖你的个人备注。"));
     const freeStatus = element(doc, "p", "pzn-result-status"); freeStatus.setAttribute("role", "status");
     panels.translation.append(freeStatus);
-    const freeButton = button(panels.translation, "补全缺失说明", () => this.runBatch("translation"), "pzn-primary");
+    const freeButton = button(panels.translation, "补全缺失名称与说明", () => this.runBatch("translation"), "pzn-primary");
     const form = element(doc, "div", "pzn-form"); panels.ai.append(form);
     const progress = element(doc, "div", "pzn-task");
     const progressText = element(doc, "span"); progressText.setAttribute("role", "status"); progress.append(progressText);
@@ -924,7 +927,7 @@ class ChineseNotesSettings extends PluginSettingTab {
     modal.onOpen = () => {
       const doc = modal.contentEl.ownerDocument;
       for (const text of [
-        "免费翻译只补全缺少中文介绍的插件。全部已有说明时无需重复操作，可从页面右上角查看插件列表。",
+        "免费翻译补全缺少的中文名称和介绍。名称采用机器直译，品牌名可能保留原文；全部齐全时无需重复操作，可从页面右上角查看插件列表。",
         "AI 分析结合插件介绍与公开作者资料生成说明。选择服务商、模型并填写 API Key 后，先保存并测试；通过后再开始分析。测试与分析可能产生接口费用。",
         "免费服务由 MyMemory 提供，匿名额度每天 5,000 字符；本插件按每库每天 4,500 字符保护。额度用完时保留已有结果。",
         "只发送插件名称、介绍和必要的公开 README 节选，不发送笔记内容。密钥保存到 Obsidian 密钥存储。你的个人备注始终优先。",
@@ -1052,7 +1055,7 @@ class ChineseNotesSettings extends PluginSettingTab {
     }
     r.freeButton.hidden = missing === 0 || missing === null;
     r.freeButton.disabled = busy;
-    r.freeStatus.textContent = this.messages.translation || (missing === null ? "正在读取插件清单…" : missing === 0 ? "中文说明已齐全，新增插件后可在这里补全。" : `有 ${missing} 个插件缺少中文说明。`);
+    r.freeStatus.textContent = this.messages.translation || (missing === null ? "正在读取插件清单…" : missing === 0 ? "中文名称与说明已齐全，新增插件后可在这里补全。" : `有 ${missing} 个插件待补全中文名称或说明。`);
     const ready = p.isAIReady() && this.draftMatchesSaved();
     r.progress.hidden = !p.activeRun;
     r.progressText.textContent = p.activeRun?.cancelled ? "正在停止，不再发起后续请求…" : p.activeRun?.taskName || (p.activeRun?.mode === "ai" ? "正在分析…" : "正在翻译…");
@@ -1444,13 +1447,27 @@ class PluginChineseNotes extends Plugin {
         if (!readme) warning = "README 无可用节选，仅依据插件介绍";
       } catch (error) { this.assertRun(run); warning = "README 未获取，仅依据插件介绍"; }
     }
-    if (!description.trim() && !readme.trim()) throw new Error("没有可用于生成说明的资料，请手动填写");
+    if (!description.trim() && !readme.trim() && !(mode === "translation" && manifest.name.trim())) throw new Error("没有可用于生成说明的资料，请手动填写");
     let note;
     if (mode === "translation") {
-      const translatedDescription = await this.translate(description.slice(0, 1800), run);
-      if (!HAN.test(translatedDescription)) throw new Error("服务未返回中文说明，已保留原文");
-      const alias = getNote(this.data, manifest.id).alias;
-      if (!alias) warning = "说明已翻译；免费翻译无法核实主要功能，请使用 AI 分析或手动填写中文别名";
+      const existing = getNote(this.data, manifest.id);
+      let translatedDescription = existing.description || (isChineseDescription(description) ? description : "");
+      if (!translatedDescription && description.trim()) {
+        translatedDescription = await this.translate(description.slice(0, 1800), run);
+        if (!HAN.test(translatedDescription)) throw new Error("服务未返回中文说明，已保留原文");
+      }
+      let alias = existing.alias;
+      if (!displayAlias(alias, manifest.name) && !HAN.test(manifest.name)) {
+        try {
+          const translatedName = await this.translate(manifest.name, run);
+          this.assertRun(run);
+          if (displayAlias(translatedName, manifest.name) && translatedName.length <= LIMITS.alias) alias = translatedName;
+          else warning = "名称未返回可用中文译文，可能是品牌名或缩写；可手动填写中文别名";
+        } catch (error) {
+          this.assertRun(run);
+          warning = `名称翻译失败，已有说明已保留：${error.message}`;
+        }
+      }
       note = { alias, description: translatedDescription.slice(0, LIMITS.description) };
     } else {
       const messages = [

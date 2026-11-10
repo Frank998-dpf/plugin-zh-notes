@@ -28,7 +28,7 @@ This plugin helps you view and organize your installed third‑party Obsidian pl
 
 ![已安装插件列表：中文别名、独立排序与手动分组](docs/images/PixPin_2026-11-02_21-50-00.png)
 
-*实际界面示例。免费翻译只处理缺少中文说明的插件，不覆盖个人备注；AI 分析需要自行配置服务。*
+*实际界面示例。免费翻译补全缺少的中文名称与说明，不覆盖个人备注；AI 分析需要自行配置服务。*
 
 离线资料和个人备注无需联网。本插件不会读取或发送你的笔记正文或个人备注；联网翻译会发送插件名称和描述，AI 分析可附带公开 README 摘录。仅支持 Obsidian 1.14.5 及以上桌面版，界面目前为中文。按时间排序使用插件文件夹的创建时间，它不一定等于安装时间。本插件不负责安装、更新或卸载其他插件。
 
@@ -51,7 +51,7 @@ Do not treat a draft release or this repository's default branch as a published 
 1. Open **Settings → Community plugins → Installed plugins**. 中文别名和说明直接显示在已安装列表中；左侧插件设置入口显示原名和中文别名。
 2. 左右两处可分别选择排序。已安装插件列表支持按中文别名搜索；打开「分组显示」，通过「管理分组」新建分组，并在插件行选择归属。
 3. Click the small pencil next to a plugin name to edit your alias and description. Restore defaults through the same editor when needed.
-4. Open **Settings → Extension Index → 免费翻译** to fill only missing descriptions. Existing personal notes are preserved.
+4. Open **Settings → Extension Index → 免费翻译** to fill missing Chinese names and descriptions. Existing Chinese descriptions are reused to save quota. Names use machine translation, so brands and abbreviations may remain untranslated. Existing personal notes are preserved.
 5. For AI, choose **AI 分析**, select a provider and model, enter your API key, and click **保存并测试**. After a successful test, click **开始分析**.
 
 AI provider presets include DeepSeek, Qwen (Beijing), GLM, SiliconFlow, Kimi (China), OpenAI, local Ollama, and a custom compatible endpoint. The base URL is under advanced options. Model names and account permissions can change; a custom model ID can be entered.

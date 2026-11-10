@@ -305,6 +305,7 @@ const fixtureManifest = { id: "calendar", name: "Calendar", description: "View d
 test("生成中用户修改备注，自动缓存不能覆盖人工记录", async () => {
   const p = plugin();
   p.installedManifests = async () => [fixtureManifest];
+  p.data.cache.calendar = { alias: "日历", description: "" };
   let resume;
   p.translate = async (text) => {
     if (text === fixtureManifest.description) await new Promise((resolve) => { resume = resolve; });
@@ -321,19 +322,22 @@ test("生成中用户修改备注，自动缓存不能覆盖人工记录", async
 test("停止任务后丢弃迟到的网络结果", async () => {
   const p = plugin();
   p.installedManifests = async () => [fixtureManifest];
+  p.data.cache.calendar = { alias: "日历", description: "" };
   let resume;
   p.http = async () => new Promise((resolve) => { resume = () => resolve({ json: { responseStatus: 200, responseData: { translatedText: "查看日期" } } }); });
   const pending = p.generateOne("calendar", "translation");
   while (!resume) await new Promise((resolve) => setImmediate(resolve));
   p.cancelTask(); resume();
   await assert.rejects(pending, /停止/);
-  assert.equal(p.data.cache.calendar, undefined);
+  assert.equal(p.data.cache.calendar.description, "");
+  assert.equal(p.data.cache.calendar.alias, "日历");
   assert.equal(p.activeRun, null);
 });
 
 test("生成期间恢复预置会取消该目标任务，迟到结果不会重新填回", async () => {
   const p = plugin();
   p.installedManifests = async () => [fixtureManifest];
+  p.data.cache.calendar = { alias: "日历", description: "" };
   let resume;
   p.http = async () => new Promise((resolve) => { resume = () => resolve({ json: { responseStatus: 200, responseData: { translatedText: "查看日期" } } }); });
   const pending = p.generateOne("calendar", "translation");
@@ -355,7 +359,7 @@ test("插件生成过程中更新版本，拒绝保存过期说明", async () =>
 test("批量补全跳过人工备注、内置资料和已有缓存", async () => {
   const p = plugin();
   p.data.entries.manual = { alias: "我的", description: "个人" };
-  p.data.cache.cached = { description: "缓存", kind: "translation" };
+  p.data.cache.cached = { alias: "缓存插件", description: "缓存", kind: "translation" };
   p.installedManifests = async () => ["manual", "dataview", "cached", "unknown"].map(id => ({ ...fixtureManifest, id }));
   const generated = [];
   p.generate = async (manifest) => { generated.push(manifest.id); };
@@ -682,14 +686,14 @@ test("仅过滤固定的冗余尾句，保留功能、风险说明与原始缓�
   assert.equal(data.entries.example.description, raw);
 });
 
-test("免费翻译只处理说明，不凭插件名称直译功能别名", async () => {
+test("免费翻译同时补全名称和说明", async () => {
   const p = plugin(); p.installedManifests = async () => [{ ...fixtureManifest, id: "unknown-plugin", name: "Age Crypto" }];
   const calls = [];
-  p.translate = async text => { calls.push(text); return "使用 age 加密笔记。"; };
+  p.translate = async text => { calls.push(text); return text === "Age Crypto" ? "age 加密" : "使用 age 加密笔记。"; };
   const result = await p.generateOne("unknown-plugin", "translation");
-  assert.equal(result.alias, "");
-  assert.deepEqual(calls, [fixtureManifest.description]);
-  assert.match(result.warning, /主要功能/);
+  assert.equal(result.alias, "age 加密");
+  assert.deepEqual(calls, [fixtureManifest.description, "Age Crypto"]);
+  assert.equal(result.warning, "");
 });
 test("免费翻译保留已有个人别名", async () => {
   const p = plugin(); p.installedManifests = async () => [fixtureManifest];
@@ -721,4 +725,45 @@ test("官方快照中累计下载超过10次的插件均有离线资料，覆盖
   assert.equal(ids.length, 9741);
   assert.equal(require("node:crypto").createHash("sha256").update(ids.join("\n")).digest("hex"),
     "b93bea57a36258474a8294ca67afd7a74057dda7ae81ac0c6a06ccfce3889550");
+});
+
+
+test("已有中文说明但缺少名称仍会补全，且不重复翻译说明", async () => {
+  const p = plugin();
+  const manifest = { ...fixtureManifest, id: "new-translator", name: "Chinese UI Translator" };
+  p.installedManifests = async () => [manifest];
+  p.data.cache[manifest.id] = { alias: "", description: "原有中文说明", kind: "translation" };
+  assert.equal(needsTranslation(p.data, manifest), true);
+  const calls = [];
+  p.translate = async text => { calls.push(text); return "中文界面翻译器"; };
+  await p.generateBatch("translation");
+  assert.deepEqual(calls, [manifest.name]);
+  assert.equal(getNote(p.data, manifest.id).alias, "中文界面翻译器");
+  assert.equal(getNote(p.data, manifest.id).description, "原有中文说明");
+  assert.equal(needsTranslation(p.data, manifest), false);
+});
+
+test("名称翻译失败仍保存说明，品牌原文不会冒充中文译名", async () => {
+  for (const fail of [false, true]) {
+    const p = plugin();
+    p.installedManifests = async () => [{ ...fixtureManifest, id: "new-brand", name: "Brand" }];
+    p.translate = async text => {
+      if (text !== "Brand") return "查看日期。";
+      if (fail) throw new Error("额度不足");
+      return "Brand";
+    };
+    const result = await p.generateOne("new-brand", "translation");
+    assert.equal(result.alias, "");
+    assert.equal(result.description, "查看日期。");
+    assert.match(result.warning, /名称/);
+    assert.equal(p.data.cache["new-brand"].description, "查看日期。");
+  }
+});
+
+test("原生中文名称无需翻译，个人空白备注也不会被批量改写", () => {
+  const data = parseData(null);
+  const manifest = { id: "new-chinese", name: "中文插件", description: "中文介绍。" };
+  assert.equal(needsTranslation(data, manifest), false);
+  data.entries[manifest.id] = { alias: "", description: "" };
+  assert.equal(needsTranslation(data, { ...manifest, name: "English" }), false);
 });

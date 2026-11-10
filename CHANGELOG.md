@@ -1,3 +1,10 @@
+# 0.6.6
+
+- Let free translation fill missing Chinese plugin names as well as descriptions, while keeping original names visible.
+- Include plugins with an existing Chinese description but no Chinese name in the completion list; reuse existing descriptions to save translation quota.
+- Preserve personal notes and existing Chinese aliases. Keep completed descriptions when name translation fails, and explain untranslated brand names or abbreviations in the editor.
+- Update completion labels and help text. Continue using the existing translation service with no additional providers or dependencies.
+
 # 0.6.5
 
 - Update 8,833 offline Chinese plugin aliases and descriptions from the supplied revised translation list, while retaining previously reviewed overrides and personal notes.
