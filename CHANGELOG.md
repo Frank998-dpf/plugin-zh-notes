@@ -1,3 +1,14 @@
+# 0.6.6
+
+- Let free translation fill missing Chinese plugin names as well as descriptions, while keeping original names visible.
+- Include plugins with an existing Chinese description but no Chinese name in the completion list; reuse existing descriptions to save translation quota.
+- Preserve personal notes and existing Chinese aliases. Keep completed descriptions when name translation fails, and explain untranslated brand names or abbreviations in the editor.
+- Update completion labels and help text. Continue using the existing translation service with no additional providers or dependencies.
+- Translate supported third-party plugin settings labels in place. Include offline labels for Calendar, Dataview, Templater, Advanced Tables, and Outliner, with per-plugin original/Chinese switching and optional completion for newly visible labels.
+- Expand offline Chinese plugin references to 10,314 entries using the 2026-11-13 official catalog and download-statistics snapshot. This covers all 10,253 listed plugins with more than 10 downloads and retains 61 earlier references outside that selection.
+- Preserve personal aliases and descriptions ahead of offline references. The 560 newly added references were drafted with machine translation and checked for common terminology errors; they have not all received individual semantic review.
+- Number plugins in the settings sidebar and installed list according to the current sort order; update list numbers after filtering and grouping. Add an option to hide disabled plugins from the installed list.
+
 # 0.6.5
 
 - Update 8,833 offline Chinese plugin aliases and descriptions from the supplied revised translation list, while retaining previously reviewed overrides and personal notes.

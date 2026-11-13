@@ -20,7 +20,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, "main.js"), "utf8") +
-  "\nmodule.exports.testAPI = { BUILTINS, managementData, sortPlugins, parseData, getNote, chunks, endpointUrl, aiNote, fingerprint, ChineseNotesSettings, PROVIDERS, settingsSignature, needsTranslation };", context);
+  "\nmodule.exports.testAPI = { BUILTINS, managementData, sortPlugins, rowEnabled, parseData, getNote, chunks, endpointUrl, aiNote, fingerprint, ChineseNotesSettings, PROVIDERS, settingsSignature, needsTranslation };", context);
 const Plugin = context.module.exports;
 const { parseData, getNote } = Plugin.testAPI;
 const { chunks, endpointUrl, aiNote, fingerprint } = Plugin.testAPI;
@@ -305,6 +305,7 @@ const fixtureManifest = { id: "calendar", name: "Calendar", description: "View d
 test("生成中用户修改备注，自动缓存不能覆盖人工记录", async () => {
   const p = plugin();
   p.installedManifests = async () => [fixtureManifest];
+  p.data.cache.calendar = { alias: "日历", description: "" };
   let resume;
   p.translate = async (text) => {
     if (text === fixtureManifest.description) await new Promise((resolve) => { resume = resolve; });
@@ -321,19 +322,22 @@ test("生成中用户修改备注，自动缓存不能覆盖人工记录", async
 test("停止任务后丢弃迟到的网络结果", async () => {
   const p = plugin();
   p.installedManifests = async () => [fixtureManifest];
+  p.data.cache.calendar = { alias: "日历", description: "" };
   let resume;
   p.http = async () => new Promise((resolve) => { resume = () => resolve({ json: { responseStatus: 200, responseData: { translatedText: "查看日期" } } }); });
   const pending = p.generateOne("calendar", "translation");
   while (!resume) await new Promise((resolve) => setImmediate(resolve));
   p.cancelTask(); resume();
   await assert.rejects(pending, /停止/);
-  assert.equal(p.data.cache.calendar, undefined);
+  assert.equal(p.data.cache.calendar.description, "");
+  assert.equal(p.data.cache.calendar.alias, "日历");
   assert.equal(p.activeRun, null);
 });
 
 test("生成期间恢复预置会取消该目标任务，迟到结果不会重新填回", async () => {
   const p = plugin();
   p.installedManifests = async () => [fixtureManifest];
+  p.data.cache.calendar = { alias: "日历", description: "" };
   let resume;
   p.http = async () => new Promise((resolve) => { resume = () => resolve({ json: { responseStatus: 200, responseData: { translatedText: "查看日期" } } }); });
   const pending = p.generateOne("calendar", "translation");
@@ -355,7 +359,7 @@ test("插件生成过程中更新版本，拒绝保存过期说明", async () =>
 test("批量补全跳过人工备注、内置资料和已有缓存", async () => {
   const p = plugin();
   p.data.entries.manual = { alias: "我的", description: "个人" };
-  p.data.cache.cached = { description: "缓存", kind: "translation" };
+  p.data.cache.cached = { alias: "缓存插件", description: "缓存", kind: "translation" };
   p.installedManifests = async () => ["manual", "dataview", "cached", "unknown"].map(id => ({ ...fixtureManifest, id }));
   const generated = [];
   p.generate = async (manifest) => { generated.push(manifest.id); };
@@ -504,6 +508,7 @@ test("旧版数据新增管理设置时不丢备注、缓存与 AI 配置", () =
   assert.equal(migrated.entries.dataview.alias, "我的查询");
   assert.equal(migrated.settings.secretId, "example-key");
   assert.equal(migrated.management.grouped, false);
+  assert.equal(migrated.management.hideDisabled, false);
   assert.equal(migrated.management.sidebarSort, "default");
 });
 
@@ -516,6 +521,17 @@ test("时间排序将未知时间置后，同一时间保留原顺序；原名�
   assert.deepEqual(Array.from(sortPlugins(items, "az"), (p) => p.index), [2, 3, 1, 0]);
   assert.deepEqual(Array.from(sortPlugins(items, "default"), (p) => p.index), [0, 1, 2, 3]);
   assert.equal(items[0].index, 0);
+});
+
+test("隐藏未启用设置持久化，列表开关状态按原生样式识别", async () => {
+  const p = plugin();
+  await p.saveManagement((m) => ({ ...m, hideDisabled: true }));
+  assert.equal(parseData(JSON.parse(JSON.stringify(p.data))).management.hideDisabled, true);
+  const row = (toggle) => ({ querySelector: () => toggle });
+  const toggle = (enabled) => ({ classList: { contains: (name) => name === "is-enabled" && enabled } });
+  assert.equal(Plugin.testAPI.rowEnabled(row(toggle(true))), true);
+  assert.equal(Plugin.testAPI.rowEnabled(row(toggle(false))), false);
+  assert.equal(Plugin.testAPI.rowEnabled(row(null)), true);
 });
 
 test("分组新增重命名删除持久化，重复名称拒绝，删除归属和折叠状态自动清理", async () => {
@@ -682,14 +698,14 @@ test("仅过滤固定的冗余尾句，保留功能、风险说明与原始缓�
   assert.equal(data.entries.example.description, raw);
 });
 
-test("免费翻译只处理说明，不凭插件名称直译功能别名", async () => {
+test("免费翻译同时补全名称和说明", async () => {
   const p = plugin(); p.installedManifests = async () => [{ ...fixtureManifest, id: "unknown-plugin", name: "Age Crypto" }];
   const calls = [];
-  p.translate = async text => { calls.push(text); return "使用 age 加密笔记。"; };
+  p.translate = async text => { calls.push(text); return text === "Age Crypto" ? "age 加密" : "使用 age 加密笔记。"; };
   const result = await p.generateOne("unknown-plugin", "translation");
-  assert.equal(result.alias, "");
-  assert.deepEqual(calls, [fixtureManifest.description]);
-  assert.match(result.warning, /主要功能/);
+  assert.equal(result.alias, "age 加密");
+  assert.deepEqual(calls, [fixtureManifest.description, "Age Crypto"]);
+  assert.equal(result.warning, "");
 });
 test("免费翻译保留已有个人别名", async () => {
   const p = plugin(); p.installedManifests = async () => [fixtureManifest];
@@ -715,10 +731,429 @@ test("已核实的内置别名突出功能，纠正字面误译", () => {
 });
 
 test("官方快照中累计下载超过10次的插件均有离线资料，覆盖集合精确匹配", () => {
-  // 2026-11-02 catalog/stats snapshot; preserve 13 earlier references outside the selection.
-  const retained = new Set(["biblib", "calendarplanner", "claudian", "claudian-plus", "i18n", "istart-note-ai", "maguilanote", "multi-ai-assistant", "notioneer", "opencode", "pkmer", "relation-weaver", "task-manager-bases-view"]);
+  // 2026-11-13 catalog/stats snapshot; retain 61 earlier references outside the selection.
+  const retained = new Set(["ai-knowledge-hub","almagest","authors-toolbox","auto-anki","bases-kanban","bases-pill-colors","bastion","bindery","busqueda-sin-tildes","claudian","dada-todo-list","data-files-editor","file-master","floating-sticky-notes","folder-focus","glasscockpit","graph-colour-spawn","graph-spawn","graphnosis","gyazo","hermes-studio","i18n","image-workflow","inkflow","lan-vault-sync","maguilanote","markitdown-flow","md-journal","md-to-hwpx","mindflow","module-box","name-dialogue","neogdsync","nextcloud-sync","note-tidy","notewright","notioneer","nox-sync","np-rf-analysis","obmind","outlook-drop-importer","painter","pkmer","plugin-manager-cn","prism-studio","rchery","run-in-background","section-variants","slexkit","smart-done-mover","speakpen-sync","stickyflow","study-time-statistics","task-manager-bases-view","tasknotes-views","team-relay-sync","thinker","thinker-tomatodo","thinkers","ticktick-bridge","vault-chat-agent"]);
   const ids = [...Plugin.testAPI.BUILTINS.keys()].filter(id => !retained.has(id)).sort();
-  assert.equal(ids.length, 9741);
+  assert.equal(ids.length, 10253);
   assert.equal(require("node:crypto").createHash("sha256").update(ids.join("\n")).digest("hex"),
-    "b93bea57a36258474a8294ca67afd7a74057dda7ae81ac0c6a06ccfce3889550");
+    "30115b9652e8acb725a43962ba856557cbb07478999d93df28a5ea959c2ee930");
+});
+
+
+
+test("已有中文说明但缺少名称仍会补全，且不重复翻译说明", async () => {
+  const p = plugin();
+  const manifest = { ...fixtureManifest, id: "new-translator", name: "Chinese UI Translator" };
+  p.installedManifests = async () => [manifest];
+  p.data.cache[manifest.id] = { alias: "", description: "原有中文说明", kind: "translation" };
+  assert.equal(needsTranslation(p.data, manifest), true);
+  const calls = [];
+  p.translate = async text => { calls.push(text); return "中文界面翻译器"; };
+  await p.generateBatch("translation");
+  assert.deepEqual(calls, [manifest.name]);
+  assert.equal(getNote(p.data, manifest.id).alias, "中文界面翻译器");
+  assert.equal(getNote(p.data, manifest.id).description, "原有中文说明");
+  assert.equal(needsTranslation(p.data, manifest), false);
+});
+
+test("名称翻译失败仍保存说明，品牌原文不会冒充中文译名", async () => {
+  for (const fail of [false, true]) {
+    const p = plugin();
+    p.installedManifests = async () => [{ ...fixtureManifest, id: "new-brand", name: "Brand" }];
+    p.translate = async text => {
+      if (text !== "Brand") return "查看日期。";
+      if (fail) throw new Error("额度不足");
+      return "Brand";
+    };
+    const result = await p.generateOne("new-brand", "translation");
+    assert.equal(result.alias, "");
+    assert.equal(result.description, "查看日期。");
+    assert.match(result.warning, /名称/);
+    assert.equal(p.data.cache["new-brand"].description, "查看日期。");
+  }
+});
+
+test("原生中文名称无需翻译，个人空白备注也不会被批量改写", () => {
+  const data = parseData(null);
+  const manifest = { id: "new-chinese", name: "中文插件", description: "中文介绍。" };
+  assert.equal(needsTranslation(data, manifest), false);
+  data.entries[manifest.id] = { alias: "", description: "" };
+  assert.equal(needsTranslation(data, { ...manifest, name: "English" }), false);
+});
+
+vm.runInContext('module.exports.uiTestAPI = { UI_BUILTINS, uiDictionary, uiTranslationData, uiTranslation, uiLabels };', context);
+const uiAPI = Plugin.uiTestAPI;
+
+test('设置页内置词典按插件隔离，覆盖五个插件，个人补翻优先且不混入名称备注', () => {
+  assert.equal(Object.keys(uiAPI.UI_BUILTINS).length, 5);
+  const data = parseData(null);
+  assert.equal(uiAPI.uiDictionary(data, 'calendar')['Words per dot'], '每个圆点代表的字数');
+  assert.equal(uiAPI.uiDictionary(data, 'unknown')['Words per dot'], undefined);
+  data.uiTranslations.calendar = { enabled: false, strings: { 'Words per dot': '自定义点数' } };
+  assert.equal(uiAPI.uiDictionary(data, 'calendar')['Words per dot'], '自定义点数');
+  assert.notEqual(getNote(data, 'calendar').alias, '自定义点数');
+});
+
+test('设置词典可持久化关闭状态，旧备注数据无损迁移，损坏词典拒绝覆盖', () => {
+  const data = parseData(null);
+  data.entries.calendar = { alias: '个人日历', description: '个人用途' };
+  data.uiTranslations.calendar = { enabled: false, strings: { 'Words per dot': '每个圆点的字数' } };
+  const restored = parseData(JSON.parse(JSON.stringify(data)));
+  assert.equal(restored.uiTranslations.calendar.enabled, false);
+  assert.equal(restored.entries.calendar.alias, '个人日历');
+  assert.throws(() => parseData({ ...data, uiTranslations: { calendar: { enabled: true, strings: { Hello: '<b>你好</b>' } } } }));
+  assert.throws(() => uiAPI.uiTranslation('Hello', ''));
+  assert.equal(uiAPI.uiTranslation('Notion', 'Notion'), 'Notion');
+});
+
+test('已有内置词条时设置页补翻不发网络请求', async () => {
+  const p = plugin();
+  p.uiSessions = new Map();
+  p.app.setting = { activeTab: { id: 'calendar', containerEl: { isConnected: true,
+    querySelectorAll: () => [] } } };
+  p.startRun = () => { throw new Error('不应联网'); };
+  await p.translateUiPage('calendar');
+});
+
+test('内置设置译文合法且限制在短标签，不收录大段说明', () => {
+  let count = 0;
+  for (const pack of Object.values(uiAPI.UI_BUILTINS)) for (const [source, value] of Object.entries(pack)) {
+    assert.ok(source.length <= 200);
+    assert.equal(uiAPI.uiTranslation(source, value), value);
+    count++;
+  }
+  assert.ok(count >= 70 && count <= 120, String(count));
+});
+
+function uiPlugin(labels) {
+  const p = plugin();
+  p.data.settings.endpoint = 'http://localhost:1234/chat/completions';
+  p.data.settings.model = 'test-model';
+  const elements = labels.map(text => ({ closest: () => null, querySelectorAll: () => [], node: { nodeValue: text } }));
+  const root = { isConnected: true, querySelectorAll: () => elements,
+    ownerDocument: { createTreeWalker: el => { let done = false; return { nextNode() { if (done) return null; done = true; return el.node; } }; } } };
+  p.app.setting = { activeTab: { id: 'test-ui', containerEl: root } };
+  p.app.plugins = { manifests: { 'test-ui': { version: '1.0.0' } } };
+  p.uiSessions = new Map();
+  p.refreshUiTranslation = () => {};
+  p.renderUiPopover = () => {};
+  return p;
+}
+function uiResponse(options) {
+  const request = JSON.parse(options.body);
+  const labels = JSON.parse(request.messages[1].content).labels;
+  return { status: 200, json: { choices: [{ message: { content: JSON.stringify(Object.fromEntries(labels.map(item => [item.id, '测试译文 '+item.id]))) } }] } };
+}
+test('当前插件翻译入口与浮层均不重复打开设置页', () => {
+  const p = plugin();
+  const root = { setAttribute() {}, querySelector: () => null };
+  const doc = { createElement: () => root, body: { append() {} }, addEventListener() {},
+    defaultView: { addEventListener() {} }, querySelectorAll: () => [anchor] };
+  const anchor = { ownerDocument: doc, setAttribute() {}, closest: () => ({ dataset: { settingId: 'highlightr-plugin' } }) };
+  p.app.setting = { activeTab: { id: 'highlightr-plugin', containerEl: { isConnected: true, ownerDocument: doc } },
+    openTabById() { throw new Error('不应重新渲染 Highlightr'); } };
+  p.closeUiPopover = () => {};
+  p.refreshUiTranslation = () => {};
+  p.refreshDocument = () => {};
+  p.renderUiPopover = () => {};
+  p.openPluginTranslation('highlightr-plugin');
+  assert.equal(p.uiPopover.id, 'highlightr-plugin');
+  assert.equal(p.uiPopover.root, root);
+  p.app.setting.activeTab.id = 'other-plugin';
+  p.app.setting.openTabById = id => {
+    p.app.setting.activeTab.id = id;
+    throw new Error('颜色选择器初始化失败');
+  };
+  p.openUiPopover('highlightr-plugin', anchor);
+  assert.equal(p.uiPopover.id, 'highlightr-plugin');
+  p.app.setting.openTabById = () => { throw new Error('目标页面无法打开'); };
+  p.app.setting.activeTab.id = 'other-plugin';
+  assert.throws(() => p.openUiPopover('highlightr-plugin', anchor), /目标页面无法打开/);
+});
+test('设置页内容更新在观察器回调中立即补译，失效回调不再修改页面', () => {
+  const p = plugin();
+  let changed, scans = 0, restores = 0;
+  const root = { isConnected: true, ownerDocument: { defaultView: {
+    MutationObserver: class { constructor(callback) { changed = callback; } }
+  } } };
+  p.manifest = { id: 'plugin-zh-notes' };
+  p.app.setting = { activeTab: { id: 'calendar', containerEl: root } };
+  p.uiSessions = new Map();
+  p.scanUiSession = () => { scans++; };
+  p.restoreUiSession = () => { restores++; };
+  p.refreshUiTranslation();
+  assert.equal(scans, 1);
+  changed();
+  assert.equal(scans, 2);
+  assert.equal(restores, 1);
+  p.uiSessions.clear();
+  changed();
+  assert.equal(scans, 2);
+});
+test('侧栏仅拦截当前插件的普通重复点击，保留图标与其他页面操作', () => {
+  const p = plugin();
+  let refreshes = 0, holds = 0, stopped = 0;
+  const doc = { body: {}, addEventListener() {}, defaultView: {
+    MutationObserver: class { constructor(callback) { this.callback = callback; } observe() {} }
+  } };
+  p.documents = new Map();
+  p.app.setting = { activeTab: { id: 'calendar', containerEl: { ownerDocument: doc } } };
+  p.refreshDocument = () => {};
+  p.refreshUiTranslation = () => { refreshes++; };
+  p.holdViewport = () => { holds++; };
+  p.watchDocument(doc);
+  const state = p.documents.get(doc);
+  const item = { dataset: { settingId: 'calendar' }, closest: () => ({}) };
+  let control = null;
+  const event = { type: 'click', button: 0, target: { closest: selector => selector === '[data-setting-id]' ? item : control },
+    preventDefault() {}, stopImmediatePropagation() { stopped++; } };
+  state.hold(event);
+  assert.equal(stopped, 1); assert.equal(holds, 0);
+  control = {};
+  state.hold(event);
+  assert.equal(holds, 1);
+  control = null; item.dataset.settingId = 'other-plugin';
+  state.hold(event);
+  assert.equal(holds, 2);
+  state.observer.callback([]);
+  assert.equal(refreshes, 1);
+});
+test('设置页 AI 补翻以两路并发处理，逐批保存，重复补翻完全复用', async () => {
+  const p = uiPlugin(Array.from({ length: 45 }, (_, i) => 'Setting '+i));
+  let active = 0, peak = 0, requests = 0, saves = 0;
+  p.saveData = async () => { saves++; };
+  p.http = async options => {
+    requests++; active++; peak = Math.max(peak, active);
+    assert.ok(JSON.parse(JSON.parse(options.body).messages[1].content).labels.length <= 20);
+    await new Promise(resolve => setTimeout(resolve, 2));
+    active--; return uiResponse(options);
+  };
+  await p.translateUiPage('test-ui');
+  assert.equal(requests, 3); assert.equal(peak, 2); assert.equal(saves, 3);
+  assert.equal(Object.keys(p.data.uiTranslations['test-ui'].strings).length, 45);
+  await p.translateUiPage('test-ui');
+  assert.equal(requests, 3); assert.equal(p.activeRun, null);
+});
+test('设置页后续批次失败保留前一批结果，重试只发送剩余内容', async () => {
+  const p = uiPlugin(Array.from({ length: 40 }, (_, i) => 'Setting '+i));
+  let calls = 0;
+  p.http = async options => {
+    if (++calls === 2) { await new Promise(resolve => setTimeout(resolve, 10)); throw new Error('模拟服务失败'); }
+    return uiResponse(options);
+  };
+  await assert.rejects(p.translateUiPage('test-ui'), /模拟服务失败/);
+  assert.equal(Object.keys(p.data.uiTranslations['test-ui'].strings).length, 20);
+  assert.equal(p.activeRun, null);
+  await p.translateUiPage('test-ui');
+  assert.equal(calls, 3);
+  assert.equal(Object.keys(p.data.uiTranslations['test-ui'].strings).length, 40);
+});
+test('设置页取消后迟到响应不写入词典，原有个人备注保留', async () => {
+  const p = uiPlugin(['New setting']);
+  let finish;
+  p.http = options => new Promise(resolve => { finish = () => resolve(uiResponse(options)); });
+  const task = p.translateUiPage('test-ui');
+  p.cancelTask(); finish();
+  await assert.rejects(task, /任务已停止/);
+  assert.equal(p.data.uiTranslations['test-ui'], undefined);
+  assert.equal(p.activeRun, null);
+});
+
+vm.runInContext('module.exports.needsAIAnalysis = needsAIAnalysis;', context);
+
+test('名称说明的 AI 候选与免费缺失分开计数，已保存 AI 结果及个人备注不重复处理', () => {
+  const p = plugin(), m = { id: 'calendar', name: 'Calendar', version: '1.0.0', description: 'Calendar' };
+  assert.equal(Plugin.needsAIAnalysis(p.data, m), true);
+  assert.equal(needsTranslation(p.data, m), false);
+  p.data.cache.calendar = { kind: 'ai', fingerprint: fingerprint(m) };
+  assert.equal(Plugin.needsAIAnalysis(p.data, m), false);
+  assert.equal(Plugin.needsAIAnalysis(p.data, { ...m, version: '2.0.0' }), true);
+  p.data.entries.calendar = { alias: '个人名称', description: '个人说明' };
+  assert.equal(Plugin.needsAIAnalysis(p.data, { ...m, version: '2.0.0' }), false);
+});
+
+test('未配置 AI 时给出直接配置提示，不发请求或创建任务', async () => {
+  const p = uiPlugin(['New setting']);
+  p.data.settings = { ...p.data.settings, endpoint: '', model: '' };
+  let requests = 0;
+  p.http = async () => { requests++; throw new Error('不应联网'); };
+  await assert.rejects(p.translateUiPage('test-ui'), /尚未配置 AI 服务/);
+  assert.equal(requests, 0); assert.equal(p.activeRun, undefined);
+  p.data.settings = { endpoint: 'https://example.com/v1/chat/completions', model: 'test', secretId: '' };
+  assert.throws(() => p.startRun('ai'), /尚未配置 AI 服务/);
+});
+
+test('设置页任务在首次通知时已携带独立类型与目标，不会被识别为名称分析', () => {
+  const p = uiPlugin(['New setting']);
+  let snapshot;
+  p.notifyUI = () => { snapshot = { kind: p.activeRun.kind, uiId: p.activeRun.uiId }; };
+  p.startRun('ai', 'settings-ui', 'test-ui');
+  assert.deepEqual(snapshot, { kind: 'settings-ui', uiId: 'test-ui' });
+});
+
+test('保存和测试配置只验证连接，重复操作不会调用说明生成或设置页翻译', async () => {
+  const p = plugin();
+  const tab = new ChineseNotesSettings(p.app, p);
+  let saves = 0, tests = 0;
+  p.saveProfile = async () => { saves++; };
+  p.testConnection = async () => { tests++; };
+  p.generateBatch = async () => { throw new Error('不应批量分析'); };
+  p.translateUiPage = async () => { throw new Error('不应翻译设置'); };
+  tab.refreshUI = () => {};
+  await tab.saveAndTest(); await tab.saveAndTest();
+  assert.equal(saves, 2); assert.equal(tests, 2);
+});
+
+test('已配置的本机接口连接失败不误报成未配置，也不擅自认定是 Ollama', async () => {
+  const p = plugin();
+  requestHandler = async () => { throw new Error('private-network-detail'); };
+  await assert.rejects(p.http({ url: 'http://127.0.0.1:1234/v1/chat/completions', method: 'POST' }, { cancelled: false }), error =>
+    /无法连接已配置的 AI 服务/.test(error.message) && !/Ollama|尚未配置|private-network-detail/.test(error.message));
+});
+
+test('未配置 AI 的设置页补翻可取消，取消时不启动任何服务', async () => {
+  const p = uiPlugin(['New setting']);
+  p.isAIReady = () => false;
+  let prompts = 0, calls = 0;
+  p.chooseFreeTranslation = async () => { prompts++; return 'cancel'; };
+  p.translateUiPage = async () => { calls++; };
+  await p.requestUiTranslation('test-ui');
+  assert.equal(prompts, 1); assert.equal(calls, 0); assert.equal(p.uiTranslationRequest, false);
+});
+
+test('未配置 AI 时只有明确同意才选择免费服务，配置入口仅跳转', async () => {
+  const p = uiPlugin(['New setting']); p.isAIReady = () => false;
+  const calls = [];
+  p.translateUiPage = async (id, service) => { calls.push([id, service]); };
+  p.chooseFreeTranslation = async () => 'free';
+  await p.requestUiTranslation('test-ui');
+  assert.deepEqual(calls, [['test-ui', 'free']]);
+  let configured = 0;
+  p.openSettings = configure => { assert.equal(configure, true); configured++; };
+  p.chooseFreeTranslation = async () => 'configure';
+  await p.requestUiTranslation('test-ui');
+  assert.equal(configured, 1); assert.equal(calls.length, 1);
+});
+
+test('AI 已配置并测试时直接使用 AI，已有内置词条时不弹出服务选择', async () => {
+  const p = uiPlugin(['New setting']); p.isAIReady = () => true;
+  p.chooseFreeTranslation = async () => { throw new Error('不应弹窗'); };
+  let service;
+  p.translateUiPage = async (_id, selected) => { service = selected; };
+  await p.requestUiTranslation('test-ui'); assert.equal(service, 'ai');
+  p.data.uiTranslations['test-ui'] = { enabled: true, strings: { 'New setting': '新设置' } };
+  p.isAIReady = () => false;
+  service = undefined;
+  await p.requestUiTranslation('test-ui'); assert.equal(service, undefined);
+});
+
+test('免费设置页翻译无需 AI 配置，使用现有 MyMemory 额度且逐条保存', async () => {
+  const p = uiPlugin(['First setting', 'Second setting']);
+  p.data.settings = { ...p.data.settings, endpoint: '', model: '', secretId: '' };
+  let requests = 0;
+  p.http = async options => {
+    requests++; assert.match(options.url, /^https:\/\/api\.mymemory\.translated\.net\//);
+    assert.equal(options.headers, undefined);
+    return { json: { responseStatus: 200, responseData: { translatedText: '设置译文' } } };
+  };
+  await p.translateUiPage('test-ui', 'free');
+  assert.equal(requests, 2);
+  assert.equal(Object.keys(p.data.uiTranslations['test-ui'].strings).length, 2);
+  assert.equal(p.data.usage.chars, 'First settingSecond setting'.length);
+  assert.equal(p.activeRun, null);
+});
+
+test('免费设置页翻译额度耗尽时不继续请求，已完成词条保留', async () => {
+  const p = uiPlugin(['First', 'Second']);
+  p.data.usage = { date: new Date().toISOString().slice(0, 10), chars: 4495 };
+  let requests = 0;
+  p.http = async () => { requests++; return { json: { responseStatus: 200, responseData: { translatedText: '第一项' } } }; };
+  await assert.rejects(p.translateUiPage('test-ui', 'free'), /预算/);
+  assert.equal(requests, 1);
+  assert.equal(p.data.uiTranslations['test-ui'].strings.First, '第一项');
+  assert.equal(p.data.uiTranslations['test-ui'].strings.Second, undefined);
+  assert.equal(p.activeRun, null);
+});
+
+test('服务选择期间重复点击不会叠加弹窗或发起第二次翻译', async () => {
+  const p = uiPlugin(['New setting']); p.isAIReady = () => false;
+  let finish, prompts = 0;
+  p.chooseFreeTranslation = () => { prompts++; return new Promise(resolve => { finish = resolve; }); };
+  const pending = p.requestUiTranslation('test-ui');
+  await assert.rejects(p.requestUiTranslation('test-ui'), /已有任务/);
+  finish('cancel'); await pending;
+  assert.equal(prompts, 1);
+});
+
+test('界面校验允许品牌与缩写原文，仍拒绝空值、错误类型、HTML 和占位符损坏', () => {
+  for (const source of ['lucide-icons (Li)', 'AI', 'Notion', 'CSV (.csv)']) assert.equal(uiAPI.uiTranslation(source, source), source);
+  assert.equal(uiAPI.uiTranslation('CSV (.csv)', 'CSV（.csv）'), 'CSV（.csv）');
+  for (const value of ['', null, {}, '<b>文字</b>', '文字\n换行']) assert.throws(() => uiAPI.uiTranslation('Label', value));
+  assert.equal(uiAPI.uiTranslation('Found ⟦BA0⟧ results', '找到 ⟦BA0⟧ 个结果'), '找到 ⟦BA0⟧ 个结果');
+  assert.throws(() => uiAPI.uiTranslation('Found ⟦BA0⟧ results', '找到结果'), /占位符/);
+  const data = parseData(null); data.uiTranslations['test-ui'] = { enabled: true, strings: { Notion: 'Notion' } };
+  assert.equal(parseData(JSON.parse(JSON.stringify(data))).uiTranslations['test-ui'].strings.Notion, 'Notion');
+});
+
+test('插件名称与 ID 从界面候选中排除，不发送给 AI', async () => {
+  const p = uiPlugin(['Brand Plugin', 'brand-plugin', 'Other setting']);
+  p.app.plugins.manifests['brand-plugin'] = { id: 'brand-plugin', name: 'Brand Plugin', version: '1.0.0' };
+  let sent;
+  p.http = async options => { sent = JSON.parse(JSON.parse(options.body).messages[1].content).labels; return uiResponse(options); };
+  const result = await p.translateUiPage('test-ui');
+  assert.deepEqual(sent.map(label => label.text), ['Other setting']);
+  assert.equal(result.translated, 1);
+});
+
+test('同批合法译文、英文原文和无效结果分别处理，仅重试失败条目', async () => {
+  const p = uiPlugin(['Save changes', 'lucide-icons (Li)', 'Broken field']);
+  let requests = 0;
+  p.http = async options => {
+    requests++;
+    if (requests === 1) return { json: { choices: [{ message: { content: '{"0":"保存更改","1":"lucide-icons (Li)","2":null}' } }] } };
+    const labels = JSON.parse(JSON.parse(options.body).messages[1].content).labels;
+    assert.deepEqual(labels.map(label => label.text), ['Broken field']);
+    return uiResponse(options);
+  };
+  const first = await p.translateUiPage('test-ui');
+  assert.equal(first.translated, 1); assert.equal(first.preserved, 1); assert.equal(first.failed, 1);
+  assert.equal(p.data.uiTranslations['test-ui'].strings['Save changes'], '保存更改');
+  assert.equal(p.data.uiTranslations['test-ui'].strings['lucide-icons (Li)'], 'lucide-icons (Li)');
+  assert.equal(p.data.uiTranslations['test-ui'].strings['Broken field'], undefined);
+  assert.equal(first.failures[0].source, 'Broken field');
+  const retry = await p.translateUiPage('test-ui');
+  assert.equal(retry.failed, 0); assert.equal(requests, 2);
+});
+
+test('缺失字段和整批格式错误不会取消其他批次，有效结果照常落盘', async () => {
+  const p = uiPlugin(Array.from({ length: 21 }, (_, index) => 'Setting '+index));
+  let calls = 0;
+  p.http = async options => {
+    calls++;
+    const count = JSON.parse(JSON.parse(options.body).messages[1].content).labels.length;
+    return count === 20 ? { json: { choices: [{ message: { content: 'not valid JSON' } }] } } : uiResponse(options);
+  };
+  const result = await p.translateUiPage('test-ui');
+  assert.equal(calls, 2); assert.equal(result.failed, 20); assert.equal(result.translated, 1);
+  assert.equal(Object.keys(p.data.uiTranslations['test-ui'].strings).length, 1);
+  assert.equal(p.activeRun, null);
+});
+
+test('侧栏节点被宿主转移到新 document 后，先释放旧控件及记录再挂载', () => {
+  const p = plugin();
+  const oldDocument = {}, newDocument = { querySelectorAll: () => [] };
+  const sideParent = { ownerDocument: newDocument, isConnected: true };
+  const listParent = { ownerDocument: newDocument, isConnected: true };
+  const side = {}, list = {};
+  const previous = { sides: new Map([[sideParent, side]]), lists: new Map([[listParent, list]]) };
+  const current = { sides: new Map(), lists: new Map() };
+  p.documents = new Map([[oldDocument, previous], [newDocument, current]]);
+  const released = [];
+  p.cleanSide = (parent, value) => { assert.equal(parent, sideParent); assert.equal(value, side); released.push('side'); };
+  p.cleanList = (parent, value) => { assert.equal(parent, listParent); assert.equal(value, list); released.push('list'); };
+  p.refreshManagement(newDocument, current);
+  assert.deepEqual(released, ['side', 'list']);
+  assert.equal(previous.sides.size, 0); assert.equal(previous.lists.size, 0);
+  p.refreshManagement(newDocument, current);
+  assert.equal(released.length, 2);
 });
