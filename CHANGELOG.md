@@ -7,6 +7,7 @@
 - Translate supported third-party plugin settings labels in place. Include offline labels for Calendar, Dataview, Templater, Advanced Tables, and Outliner, with per-plugin original/Chinese switching and optional completion for newly visible labels.
 - Expand offline Chinese plugin references to 10,314 entries using the 2026-11-13 official catalog and download-statistics snapshot. This covers all 10,253 listed plugins with more than 10 downloads and retains 61 earlier references outside that selection.
 - Preserve personal aliases and descriptions ahead of offline references. The 560 newly added references were drafted with machine translation and checked for common terminology errors; they have not all received individual semantic review.
+- Number plugins in the settings sidebar and installed list according to the current sort order; update list numbers after filtering and grouping. Add an option to hide disabled plugins from the installed list.
 
 # 0.6.5
 

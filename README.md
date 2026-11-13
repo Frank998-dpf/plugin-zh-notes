@@ -113,7 +113,7 @@ The complete upstream MIT notice is also embedded in `main.js`, so it is retaine
 
 Report bugs or specific translation corrections in [GitHub Issues](https://github.com/Frank998-dpf/plugin-zh-notes/issues). Include the target plugin ID and a short description; remove API keys, personal paths, and private note content before attaching logs or screenshots.
 
-## 插件设置页翻译（本地开发版）
+## 插件设置页翻译
 
 设置仅保留“AI 服务配置”“免费翻译服务”两个页签。AI 页分为三步：配置 AI 服务、保存并测试、点击翻译插件中文名称与使用说明。两个 AI 功能共享服务与密钥；“保存并测试”始终只验证连接，不会自动开始批量翻译。免费页提供名称与说明的缺失补全，并说明设置页翻译入口。两类服务分别统计任务与进度，按钮明确标注处理范围及插件数量。
 
@@ -139,7 +139,7 @@ Report bugs or specific translation corrections in [GitHub Issues](https://githu
 
 数据集中维护于 `src/plugin.js` 的 `UI_BUILTINS`，与插件名称/用途的 `BUILTINS` 分开。补翻结果优先于内置词典，关闭状态及补翻结果随现有插件配置保存，个人备注不受影响。新增词条应核对源码和实际设置页，构建及测试后在独立 Obsidian 库验收；不要仅因版本号变化判定译文仍然正确。
 
-本次桌面验收：Obsidian 1.15.0，独立库 plugin-zh-notes-qa；Calendar 1.5.10、Dataview 0.5.68、Templater 2.26.0、Advanced Tables 0.23.2、Outliner 4.11.0。新版本额外标签仅做源码核对，尚未逐项实机验收。设置页翻译已补做真实 DeepSeek 回归，详见下文。尚未发布，版本号保持不变。
+本次桌面验收：Obsidian 1.15.0，独立库 plugin-zh-notes-qa；Calendar 1.5.10、Dataview 0.5.68、Templater 2.26.0、Advanced Tables 0.23.2、Outliner 4.11.0。新版本额外标签仅做源码核对，尚未逐项实机验收。设置页翻译已补做真实 DeepSeek 回归，详见下文。
 
 新版交互回归：78 项自动测试通过；真实 Obsidian 设置窗口验证两个页签、AI 三步流程、服务选择的取消/配置/免费三个分支、免费译文缓存复用。免费路径验证使用受控响应且恢复测试状态，未调用真实付费 API。图标保持 13px 淡灰无底色。
 
