@@ -870,6 +870,24 @@ test('当前插件翻译入口与浮层均不重复打开设置页', () => {
   p.app.setting.activeTab.id = 'other-plugin';
   assert.throws(() => p.openUiPopover('highlightr-plugin', anchor), /目标页面无法打开/);
 });
+test('设置页翻译浮层挂在当前模态层，非模态页面回退到 body', () => {
+  for (const inModal of [true, false]) {
+    const p = plugin();
+    let host = '';
+    const root = { setAttribute() {}, querySelector: () => null };
+    const doc = { createElement: () => root, body: { append: () => { host = 'body'; } }, addEventListener() {},
+      defaultView: { addEventListener() {} } };
+    const modal = { append: () => { host = 'modal'; } };
+    const anchor = { ownerDocument: doc, setAttribute() {},
+      closest: selector => selector === '.modal-container' && inModal ? modal : null };
+    p.app.setting = { activeTab: { id: 'calendar' } };
+    p.closeUiPopover = () => {};
+    p.refreshUiTranslation = () => {};
+    p.renderUiPopover = () => {};
+    p.openUiPopover('calendar', anchor);
+    assert.equal(host, inModal ? 'modal' : 'body');
+  }
+});
 test('设置页内容更新在观察器回调中立即补译，失效回调不再修改页面', () => {
   const p = plugin();
   let changed, scans = 0, restores = 0;
