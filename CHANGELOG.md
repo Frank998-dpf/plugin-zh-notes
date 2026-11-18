@@ -1,3 +1,8 @@
+# 0.6.7
+
+- Keep the settings translation popover inside the active Settings modal so it shares the modal stacking context, with a body fallback outside modal pages.
+- Retain the existing optional free translation service, offline references, AI translation, and personal notes. Service-side free quota limits still apply.
+
 # 0.6.6
 
 - Let free translation fill missing Chinese plugin names as well as descriptions, while keeping original names visible.

@@ -1933,7 +1933,8 @@ class PluginChineseNotes extends Plugin {
     const outside = event => { if (!root.contains(event.target) && !anchor.contains(event.target)) close(); };
     const key = event => { if (event.key === 'Escape') { close(); anchor.focus(); } };
     this.uiPopover = { id, anchor, root, doc, close, outside, key };
-    doc.body.append(root);
+    const modal = anchor.closest('.modal-container');
+    (modal?.append ? modal : doc.body).append(root);
     doc.addEventListener('pointerdown', outside, true); doc.addEventListener('keydown', key, true);
     doc.defaultView.addEventListener('resize', close); doc.addEventListener('scroll', close, true);
     anchor.setAttribute('aria-expanded', 'true');
